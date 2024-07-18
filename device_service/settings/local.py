@@ -24,11 +24,11 @@ DEFAULT_TENANT_HOST = "localhost"
 DATABASES = {
     "default": {
         "ENGINE": "django_tenants.postgresql_backend",
-        "NAME": "spacedf_device_service",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "NAME": os.getenv("DB_NAME", "device_service"),  # noqa
+        "USER": os.getenv("DB_USERNAME", "postgres"),  # noqa
+        "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),  # noqa
+        "HOST": os.getenv("DB_HOST", "localhost"),  # noqa
+        "PORT": os.getenv("DB_PORT", 5436),  # noqa
     }
 }
 

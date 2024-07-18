@@ -1,4 +1,11 @@
+import importlib.util
 import os
+import sys
+
+if importlib.util.find_spec("common") is None:
+    sys.path.append(
+        os.path.abspath(os.path.join("..", "pkg"))
+    )  # Import pkg without install
 
 from celery import Celery
 from common.celery.routing import (

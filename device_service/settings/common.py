@@ -31,6 +31,7 @@ SHARED_APPS = [
     "corsheaders",
     "drf_yasg",
     "common.apps.organization",
+    "common.apps.celery_autoreload",
 ]
 
 TENANT_APPS = [
