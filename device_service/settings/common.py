@@ -157,6 +157,8 @@ SWAGGER_SETTINGS = {
 # Multi-tenants
 TENANT_MODEL = "organization.Organization"
 TENANT_DOMAIN_MODEL = "organization.Domain"
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
+PUBLIC_SCHEMA_URLCONF = "device_service.urls_public"
 
 # Celery
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
