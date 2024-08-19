@@ -41,7 +41,7 @@ CORS_ALLOWED_ORIGINS = os.getenv(  # noqa
 SIMPLE_JWT = {
     "ALGORITHM": "RS256",
     "JWK_URL": os.getenv(  # noqa
-        "JWK_URL", "http://localhost:8001/api/.well-known/jwks.json"
+        "JWK_URL", "http://localhost:8001/auth/api/.well-known/jwks.json"
     ),
 }
 
