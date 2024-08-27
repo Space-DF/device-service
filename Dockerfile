@@ -15,7 +15,6 @@ ARG CELERY_BROKER_URL
 ARG JWK_URL
 
 # Allows docker to cache installed dependencies between builds
-RUN apk add build-base libffi-dev
 COPY ./device_service/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 COPY ./pkg pkg
