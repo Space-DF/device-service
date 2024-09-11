@@ -4,8 +4,8 @@ import sys
 
 if importlib.util.find_spec("common") is None:
     sys.path.append(
-        os.path.abspath(os.path.join("..", "pkg"))
-    )  # Import pkg without install
+        os.path.abspath(os.path.join("..", "django-common-utils"))
+    )  # Import django-common-utils without install
 
 from celery import Celery
 from common.celery.routing import (

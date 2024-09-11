@@ -15,15 +15,15 @@ ARG CELERY_BROKER_URL
 ARG JWK_URL
 
 # Allows docker to cache installed dependencies between builds
-COPY ./device_service/requirements.txt requirements.txt
+COPY ./device-service/requirements.txt requirements.txt
 RUN pip install -r requirements.txt
-COPY ./pkg pkg
-RUN pip install ../pkg
+COPY ./django-common-utils django-common-utils
+RUN pip install ../django-common-utils
 
 # Adds our application code to the image
-COPY ./device_service device_service
+COPY ./device-service device-service
 
-WORKDIR /device_service
+WORKDIR /device-service
 
 EXPOSE 80
 
