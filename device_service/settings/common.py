@@ -34,12 +34,20 @@ SHARED_APPS = [
     "common.apps.celery_autoreload",
 ]
 
+
 TENANT_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "common.apps.organization_user",
     "common.apps.space",
     "common.apps.space_role",
+    "device_model",
+    "device",
+    "device.device_types.ttn_device",
+    "device.device_types.chirpstack_device",
+    "device.device_types.mqtt_device",
+    "device.device_types.ttn_gateway",
+    "country",
 ]
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
