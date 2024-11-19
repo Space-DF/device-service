@@ -8,14 +8,22 @@ from device_model.models import DeviceModel
 
 class Device(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
-    slug_name = models.SlugField(unique=True)
-    description = models.TextField()
     device_model = models.ForeignKey(
         DeviceModel, related_name="devices", on_delete=models.CASCADE
     )
-    is_activate = models.BooleanField(default=True)
-    space = models.ForeignKey(Space, related_name="devices", on_delete=models.CASCADE)
+
+
+class SpaceDevice(BaseModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    slug_name = models.SlugField(unique=True)
+    description = models.TextField()
+    space = models.ForeignKey(
+        Space, related_name="space_devices", on_delete=models.CASCADE
+    )
+    device = models.ForeignKey(
+        Device, related_name="space_devices", on_delete=models.CASCADE
+    )
 
     class Meta:
         indexes = [

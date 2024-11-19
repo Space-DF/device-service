@@ -1,6 +1,6 @@
 from django.db import models
 
-from country.models import LoraFrequency
+from device.frequency.models import LoraFrequency
 from device.models import AbstractLorawanDevice, Device
 
 

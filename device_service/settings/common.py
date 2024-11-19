@@ -47,7 +47,7 @@ TENANT_APPS = [
     "device.device_types.chirpstack_device",
     "device.device_types.mqtt_device",
     "device.device_types.ttn_gateway",
-    "country",
+    "device.frequency",
 ]
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
