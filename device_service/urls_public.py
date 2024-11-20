@@ -17,7 +17,7 @@ Including another URLconf
 from common.swagger.views import get_tenant_schema_view
 from django.db import connection
 from django.http import HttpResponse
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 from drf_yasg import openapi
 from rest_framework import permissions
 
@@ -52,4 +52,6 @@ urlpatterns = [
     ),
     # health
     path("device/api/health", health_check),
+    path("device/api/", include("device_model.urls")),
+
 ]
