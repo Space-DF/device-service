@@ -27,7 +27,7 @@ WORKDIR /device-service
 
 EXPOSE 80
 
-ENV DJANGO_SETTINGS_MODULE="device_service.settings.production"
+ENV DJANGO_SETTINGS_MODULE="device_service.settings"
 
 ENV ENV=${ENV}
 ENV SECRET_KEY=${SECRET_KEY}

@@ -14,7 +14,7 @@ from common.celery.routing import (
 )
 from django.conf import settings
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings.local")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings")
 app = Celery("device_service")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 

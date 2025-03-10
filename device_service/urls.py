@@ -15,8 +15,7 @@ Including another URLconf
 """
 
 from common.swagger.views import get_tenant_schema_view
-from django.contrib import admin
-from django.urls import path, re_path
+from django.urls import re_path
 from drf_yasg import openapi
 from rest_framework import permissions
 
@@ -41,7 +40,5 @@ urlpatterns = [
         schema_view.with_ui("swagger", cache_timeout=0),
         name="schema-swagger-ui",
     ),
-    # admin
-    path("device/admin/", admin.site.urls),
     # apis
 ]

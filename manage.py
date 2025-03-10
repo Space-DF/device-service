@@ -11,7 +11,7 @@ def main():
         sys.path.append(
             os.path.abspath(os.path.join("..", "django-common-utils"))
         )  # Import django-common-utils without install
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings.local")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

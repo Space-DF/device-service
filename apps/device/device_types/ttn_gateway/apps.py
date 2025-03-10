@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class DeviceModelConfig(AppConfig):
+class TtnGatewayConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "device_model"
+    name = "apps.device.device_types.ttn_gateway"
