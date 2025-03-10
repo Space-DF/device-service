@@ -29,4 +29,10 @@ class BaseDestroyMixin(BaseClient):
         return self.make_request("DELETE", endpoint=endpoint)
 
 
-__all__ = ['BaseListMixin', 'BaseRetrieveMixin', 'BaseCreateMixin', 'BaseUpdateMixin', 'BaseDestroyMixin']
+__all__ = [
+    "BaseListMixin",
+    "BaseRetrieveMixin",
+    "BaseCreateMixin",
+    "BaseUpdateMixin",
+    "BaseDestroyMixin",
+]

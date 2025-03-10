@@ -9,7 +9,7 @@
 
 ---
 
-# SpaceDF Dashboard
+# SpaceDF Device Service
 
 ## Prerequisites
 - Python 3.10
@@ -18,7 +18,7 @@
 ## Clone source code
 
 ```
-git clone git@github.com:Space-DF/dashboard-service.git
+git clone git@github.com:Space-DF/device-service.git
 git clone git@github.com:Space-DF/django-common-utils.git
 ```
 

@@ -17,4 +17,4 @@ class BearerAuthenticator(BaseAuthenticator):
         return {"Authorization": f"Bearer {self.token}"}
 
 
-__all__ = ['BaseAuthenticator', 'BearerAuthenticator']
+__all__ = ["BaseAuthenticator", "BearerAuthenticator"]
