@@ -43,10 +43,10 @@ TENANT_APPS = [
     "common.apps.space_role",
     "device_model",
     "device",
-    "device.device_types.ttn_device",
-    "device.device_types.chirpstack_device",
-    "device.device_types.mqtt_device",
-    "device.device_types.ttn_gateway",
+    "device.components.ttn_device",
+    "device.components.chirpstack_device",
+    "device.components.mqtt_device",
+    "device.components.ttn_gateway",
     "device.frequency",
 ]
 

@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
             name="device",
             field=models.OneToOneField(
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name="chipstack_device",
+                related_name="chirpstack_device",
                 to="device.device",
             ),
         ),
@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
             field=models.ForeignKey(
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
-                related_name="chipstack_devices",
+                related_name="chirpstack_devices",
                 to="frequency.lorafrequency",
             ),
         ),

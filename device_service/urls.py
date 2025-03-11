@@ -45,4 +45,5 @@ urlpatterns = [
     path("device/admin/", admin.site.urls),
     # apis
     path("device/api/", include("device_model.urls")),
+    path("device/api/", include("device.urls"))
 ]
