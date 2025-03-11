@@ -13,6 +13,9 @@ from common.celery.routing import (
     setup_synchronous_model_task_routing,
 )
 from django.conf import settings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings")
 app = Celery("device_service")

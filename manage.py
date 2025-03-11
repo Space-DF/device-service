@@ -4,9 +4,13 @@ import importlib.util
 import os
 import sys
 
+from dotenv import load_dotenv
+
 
 def main():
     """Run administrative tasks."""
+    load_dotenv()
+
     if importlib.util.find_spec("common") is None:
         sys.path.append(
             os.path.abspath(os.path.join("..", "django-common-utils"))

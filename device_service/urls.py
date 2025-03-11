@@ -15,7 +15,7 @@ Including another URLconf
 """
 
 from common.swagger.views import get_tenant_schema_view
-from django.urls import re_path
+from django.urls import include, path, re_path
 from drf_yasg import openapi
 from rest_framework import permissions
 
@@ -41,4 +41,5 @@ urlpatterns = [
         name="schema-swagger-ui",
     ),
     # apis
+    path("device/api/", include("apps.device_model.urls")),
 ]
