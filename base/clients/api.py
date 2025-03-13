@@ -35,4 +35,4 @@ class BaseClient(ABC):
         )
 
 
-__all__ = ['BaseClient']
+__all__ = ["BaseClient"]

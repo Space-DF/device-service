@@ -2,8 +2,11 @@ from common.pagination.base_pagination import BasePagination
 from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 
-from device_model.models import DeviceManufacture, DeviceModel
-from device_model.serializers import DeviceManufactureSerializer, DeviceModelSerializer
+from apps.device_model.models import DeviceManufacture, DeviceModel
+from apps.device_model.serializers import (
+    DeviceManufactureSerializer,
+    DeviceModelSerializer,
+)
 
 
 class DeviceManufactureViewSet(viewsets.ModelViewSet):

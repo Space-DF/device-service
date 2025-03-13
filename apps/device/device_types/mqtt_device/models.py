@@ -2,7 +2,7 @@ import uuid
 
 from django.db import models
 
-from device.models import Device
+from apps.device.models import Device
 
 
 class MqttDevice(models.Model):

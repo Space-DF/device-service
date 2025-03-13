@@ -4,14 +4,18 @@ import importlib.util
 import os
 import sys
 
+from dotenv import load_dotenv
+
 
 def main():
     """Run administrative tasks."""
+    load_dotenv()
+
     if importlib.util.find_spec("common") is None:
         sys.path.append(
             os.path.abspath(os.path.join("..", "django-common-utils"))
         )  # Import django-common-utils without install
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings.local")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

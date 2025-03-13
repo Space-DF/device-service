@@ -13,13 +13,18 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from pathlib import Path
 
+# Basic settings
 SERVICE_NAME = "device"
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+DEBUG = os.getenv("ENV", default="dev") == "dev"
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "django-insecure-*$0b8ibx7uzk45cm+fxw7*jj(yzi2ye!l4+!dnyxa-u-nbuz=q"
+)
+ALLOWED_HOSTS = [os.getenv("ALLOWED_HOSTS", "*")]
+HOST = os.getenv("HOST", "http://localhost:8000/")
+DEFAULT_TENANT_HOST = os.getenv("DEFAULT_TENANT_HOST", "localhost")
 
 # Application definition
-
 SHARED_APPS = [
     "django_tenants",
     "django.contrib.contenttypes",
@@ -34,20 +39,16 @@ SHARED_APPS = [
     "common.apps.celery_autoreload",
 ]
 
-
 TENANT_APPS = [
-    "django.contrib.admin",
     "django.contrib.auth",
-    "common.apps.organization_user",
     "common.apps.space",
-    "common.apps.space_role",
-    "device_model",
-    "device",
-    "device.device_types.ttn_device",
-    "device.device_types.chirpstack_device",
-    "device.device_types.mqtt_device",
-    "device.device_types.ttn_gateway",
-    "device.frequency",
+    "apps.device_model",
+    "apps.device",
+    "apps.device.device_types.ttn_device",
+    "apps.device.device_types.chirpstack_device",
+    "apps.device.device_types.mqtt_device",
+    "apps.device.device_types.ttn_gateway",
+    "apps.device.frequency",
 ]
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -60,14 +61,16 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "common.middlewares.query_alert_middleware.QueryAlertMiddleware",
 ]
 
 ROOT_URLCONF = "device_service.urls"
+WSGI_APPLICATION = "device_service.wsgi.application"
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
+# Templates
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -77,88 +80,52 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = "device_service.wsgi.application"
-
-DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
-
-
-# Password validation
-# https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
-]
-
+# Database
+DATABASES = {
+    "default": {
+        "ENGINE": "django_tenants.postgresql_backend",
+        "NAME": os.getenv("DB_NAME", "spacedf_device_service"),
+        "USER": os.getenv("DB_USERNAME", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": "5432",
+    }
+}
 
 # Internationalization
-# https://docs.djangoproject.com/en/3.2/topics/i18n/
-
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/3.2/howto/static-files/
-
+# Static files
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
-
 STATIC_URL = "/device/static/"
-
 STATICFILES_DIRS = (
     os.path.join(BASE_DIR, "<app_name>/static"),
     os.path.join(BASE_DIR, "static"),
 )
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Rest framework option
+# Rest framework
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
     "EXCEPTION_HANDLER": "common.errors.exception_handler.custom_exception_handler",
 }
 
-# auth config
-AUTH_USER_MODEL = "organization_user.OrganizationUser"
-
-ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_AUTHENTICATION_METHOD = "email"
-
-# Docs
+# Swagger settings
 SWAGGER_SETTINGS = {
     "SECURITY_DEFINITIONS": {
-        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"}
+        "User ID": {"type": "apiKey", "name": "X-User-ID", "in": "header"},
+        "Space": {"type": "apiKey", "name": "X-Space", "in": "header"},
     }
 }
 
@@ -174,21 +141,18 @@ CELERY_ACKS_LATE = True
 CELERYD_PREFETCH_MULTIPLIER = 1
 CELERY_APP = "device_service.celery.app"
 CLONE_MODELS = [
-    "organizationuser",
-    "organizationpolicy",
-    "organizationrole",
-    "organizationroleuser",
     "space",
-    "spacepolicy",
-    "spacerole",
-    "spaceroleuser",
 ]
 CELERY_TASKS = [
     "common.apps.organization",
-    "common.apps.organization_user",
     "common.apps.space",
-    "common.apps.space_role",
 ]
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost")
 
-# Middlewares
+# Middleware settings
 PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static"]
+
+# CORS settings
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(
+    ","
+)

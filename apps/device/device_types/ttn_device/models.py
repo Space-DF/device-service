@@ -1,7 +1,7 @@
 from django.db import models
 
-from device.frequency.models import LoraFrequency
-from device.models import AbstractLorawanDevice, Device
+from apps.device.frequency.models import LoraFrequency
+from apps.device.models import AbstractLorawanDevice, Device
 
 
 class TtnDevice(AbstractLorawanDevice):

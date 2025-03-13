@@ -3,7 +3,7 @@ import uuid
 from common.apps.space.models import BaseModel, Space
 from django.db import models
 
-from device_model.models import DeviceModel
+from apps.device_model.models import DeviceModel
 
 
 class Device(BaseModel):

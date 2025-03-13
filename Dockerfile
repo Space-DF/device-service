@@ -12,7 +12,6 @@ ARG CORS_ALLOWED_ORIGINS
 ARG HOST
 ARG DEFAULT_TENANT_HOST
 ARG CELERY_BROKER_URL
-ARG JWK_URL
 
 # Allows docker to cache installed dependencies between builds
 COPY ./device-service/requirements.txt requirements.txt
@@ -27,7 +26,7 @@ WORKDIR /device-service
 
 EXPOSE 80
 
-ENV DJANGO_SETTINGS_MODULE="device_service.settings.production"
+ENV DJANGO_SETTINGS_MODULE="device_service.settings"
 
 ENV ENV=${ENV}
 ENV SECRET_KEY=${SECRET_KEY}
@@ -40,7 +39,6 @@ ENV CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
 ENV HOST=${HOST}
 ENV DEFAULT_TENANT_HOST=${DEFAULT_TENANT_HOST}
 ENV CELERY_BROKER_URL=${CELERY_BROKER_URL}
-ENV JWK_URL=${JWK_URL}
 
 RUN ["chmod", "+x", "./docker-entrypoint.sh"]
 

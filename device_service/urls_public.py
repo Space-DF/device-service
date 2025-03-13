@@ -31,7 +31,7 @@ schema_view = get_tenant_schema_view(
         contact=openapi.Contact(email="contact@snippets.local"),
         license=openapi.License(name="BSD License"),
     ),
-    path="/device/api/",
+    path="/api/",
     public=True,
     permission_classes=[permissions.AllowAny],
 )
@@ -52,6 +52,5 @@ urlpatterns = [
     ),
     # health
     path("device/api/health", health_check),
-    path("device/api/", include("device_model.urls")),
-
+    path("device/api/", include("apps.device_model.urls")),
 ]

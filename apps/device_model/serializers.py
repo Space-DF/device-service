@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from device_model.models import DeviceManufacture, DeviceModel
+from apps.device_model.models import DeviceManufacture, DeviceModel
 
 
 class DeviceManufactureSerializer(serializers.ModelSerializer):
@@ -11,7 +11,6 @@ class DeviceManufactureSerializer(serializers.ModelSerializer):
 
 
 class DeviceModelSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = DeviceModel
         fields = "__all__"
