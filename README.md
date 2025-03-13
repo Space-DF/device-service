@@ -47,9 +47,8 @@ git clone -b dev git@github.com:Space-DF/django-common-utils.git
 
 - Create testing organization
   ```
-  python manage.py create_tenant
+  python manage.py create_organization
   ```
-  * Note: Domain or testing organization should be `<slug_name>.localhost`
 
 - Create testing space
   ```
