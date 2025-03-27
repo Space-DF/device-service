@@ -52,5 +52,5 @@ urlpatterns = [
     ),
     # health
     path("device/api/health", health_check),
-    path("device/api/", include("apps.device_model.urls")),
+    path("api/", include("apps.device_model.urls")),
 ]
