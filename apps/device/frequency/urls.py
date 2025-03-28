@@ -1,4 +1,5 @@
 from rest_framework.routers import DefaultRouter
+
 from apps.device.frequency.views import LoraFrequencyViewSet
 
 router = DefaultRouter()

@@ -41,6 +41,6 @@ urlpatterns = [
         name="schema-swagger-ui",
     ),
     # apis
-    path("api", include("apps.device_model.urls")),
-    path("api", include("apps.device.urls")),
+    path("api/", include("apps.device_model.urls")),
+    path("api/", include("apps.device.urls")),
 ]
