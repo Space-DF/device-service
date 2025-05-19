@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class FrequencyConfig(AppConfig):
+class DeviceRuleConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.device.frequency"
+    name = "apps.rule.definition"

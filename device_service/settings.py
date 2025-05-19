@@ -44,11 +44,11 @@ TENANT_APPS = [
     "common.apps.space",
     "apps.device_model",
     "apps.device",
-    "apps.device.device_types.ttn_device",
-    "apps.device.device_types.chirpstack_device",
-    "apps.device.device_types.mqtt_device",
-    "apps.device.device_types.ttn_gateway",
-    "apps.device.frequency",
+    "apps.device_connector",
+    "apps.rule.resource",
+    "apps.rule.definition",
+    "apps.rule.action",
+    "apps.network_server",
 ]
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]

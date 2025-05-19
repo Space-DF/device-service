@@ -7,7 +7,7 @@ app_name = "device_model"
 
 router = DefaultRouter()
 router.register("manufacturers", DeviceManufactureViewSet)
-router.register("models", DeviceModelViewSet)
+router.register("device-models", DeviceModelViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),

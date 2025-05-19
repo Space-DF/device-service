@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class TtnDeviceConfig(AppConfig):
+class RuleActionConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.device.device_types.ttn_device"
+    name = "apps.rule.action"
