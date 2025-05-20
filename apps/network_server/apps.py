@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class MqttDeviceConfig(AppConfig):
+class DeviceRuleConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "apps.device.device_types.mqtt_device"
+    name = "apps.network_server"
