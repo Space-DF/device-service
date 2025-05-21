@@ -156,3 +156,8 @@ PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static"]
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(
     ","
 )
+
+# EMQX
+EMQX_HOST = os.getenv("EMQX_HOST", "http://emqx:18083/api/v5")
+USERNAME = os.getenv("USERNAME", "admin")
+PASSWORD = os.getenv("PASSWORD", "public")
