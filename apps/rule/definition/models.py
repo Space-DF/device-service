@@ -2,8 +2,8 @@ import uuid
 
 from django.db import models
 
-from apps.rule.resource.models import Resource
 from apps.rule.action.models import Action
+from apps.rule.resource.models import Resource
 
 
 class Definition(models.Model):
