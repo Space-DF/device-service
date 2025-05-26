@@ -11,7 +11,7 @@ class DeviceConnector(BaseModel):
     network_server = models.ForeignKey(
         NetworkServer, on_delete=models.CASCADE, related_name="device_connector"
     )
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, unique=True)
     connector_type = models.CharField(max_length=255)
     status = models.CharField(max_length=255)
 

@@ -1,12 +1,12 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.device_connector.views import APIDeviceConnectorView
+from apps.rule.action.views import ActionViewSet
 
-app_name = "device_connector"
+app_name = "rule.action"
 
 router = DefaultRouter()
-router.register("device-connector", APIDeviceConnectorView)
+router.register("rule-actions", ActionViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),

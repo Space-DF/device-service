@@ -22,10 +22,10 @@ class DeviceMqttConfigSerializer(ModelSerializer):
 
 class DeviceConnectorSerializer(ModelSerializer):
     deviceHttpConfig = DeviceHttpConfigSerializer(
-        many=False, required=False, allow_null=True
+        source="device_http_config", many=False, required=False, allow_null=True
     )
     deviceMqttConfig = DeviceMqttConfigSerializer(
-        many=False, required=False, allow_null=True
+        source="device_mqtt_config", many=False, required=False, allow_null=True
     )
     status = serializers.CharField(required=False)
 
@@ -42,8 +42,8 @@ class DeviceConnectorSerializer(ModelSerializer):
         ]
 
     def validate(self, attrs):
-        http_config = attrs.get("deviceHttpConfig")
-        mqtt_config = attrs.get("deviceMqttConfig")
+        http_config = attrs.get("device_http_config")
+        mqtt_config = attrs.get("device_mqtt_config")
 
         if http_config and mqtt_config:
             raise serializers.ValidationError(
