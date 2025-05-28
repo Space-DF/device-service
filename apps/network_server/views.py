@@ -1,16 +1,17 @@
 from common.pagination.base_pagination import BasePagination
-from rest_framework import viewsets
-from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.request import Request
+from rest_framework.views import APIView
 
-from apps.device_model.views import UseTenantFromRequestMixin
-from apps.network_server.models import NetworkServer
-from apps.network_server.serializers import NetworkServerSerializer
+from apps.network_server.services import get_network_servers
 
 
-class NetworkServerViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = NetworkServer.objects.all()
-    serializer_class = NetworkServerSerializer
-    pagination_class = BasePagination
-    filter_backends = [OrderingFilter, SearchFilter]
-    ordering_fields = ["name"]
-    search_fields = ["name"]
+class NetworkServerView(APIView):
+    pagination_class = BasePagination()
+
+    def get(self, request: Request):
+        name = request.query_params.get("name")
+        all_servers = get_network_servers(name=name)
+
+        paginator = self.pagination_class
+        paginated_data = paginator.paginate_queryset(all_servers, request)
+        return paginator.get_paginated_response(paginated_data)

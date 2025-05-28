@@ -3,13 +3,15 @@ import uuid
 from common.models.base_model import BaseModel
 from django.db import models
 
-from apps.network_server.models import NetworkServer
+from apps.network_server.services import NetworkServer
 
 
 class DeviceConnector(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    network_server = models.ForeignKey(
-        NetworkServer, on_delete=models.CASCADE, related_name="device_connector"
+    network_server = models.CharField(
+        max_length=255,
+        choices=NetworkServer.choices,
+        default=NetworkServer.TTN,
     )
     name = models.CharField(max_length=255, unique=True)
     connector_type = models.CharField(max_length=255)
