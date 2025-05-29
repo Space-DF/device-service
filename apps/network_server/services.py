@@ -16,13 +16,13 @@ network_servers = {
         "name": "TTN",
         "logo": "https://avatars.githubusercontent.com/u/13333576",
         "description": "The Things Network",
-        "connection_type": ["http_server", "mqtt_broker"],
+        "connection_types": ["http_server", "mqtt_broker"],
     },
     NetworkServer.CHIRPSTACK: {
         "name": "Chirpstack",
         "logo": "https://www.chirpstack.de/assets/logo-blue.png",
         "description": "Chirpstack LoRaWAN",
-        "connection_type": ["http_server", "mqtt_broker"],
+        "connection_types": ["http_server", "mqtt_broker"],
     },
 }
 
@@ -30,13 +30,17 @@ network_servers = {
 def get_network_servers(name: Optional[str] = None) -> List[dict]:
     result = [
         {
-            "name": meta["name"],
-            "logo": meta["logo"],
-            "description": meta["description"],
-            "connection_type": meta["connection_type"],
+            "name": network_server["name"],
+            "logo": network_server["logo"],
+            "description": network_server["description"],
+            "connection_types": network_server["connection_types"],
         }
-        for _, meta in network_servers.items()
+        for _, network_server in network_servers.items()
     ]
     if name:
-        result = [ns for ns in result if ns["name"].lower() == name.lower()]
+        result = [
+            network_server
+            for network_server in result
+            if name.lower() in network_server["name"].lower()
+        ]
     return result

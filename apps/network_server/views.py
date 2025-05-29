@@ -9,8 +9,8 @@ class NetworkServerView(APIView):
     pagination_class = BasePagination()
 
     def get(self, request: Request):
-        name = request.query_params.get("name")
-        all_servers = get_network_servers(name=name)
+        search = request.query_params.get("search")
+        all_servers = get_network_servers(name=search)
 
         paginator = self.pagination_class
         paginated_data = paginator.paginate_queryset(all_servers, request)
