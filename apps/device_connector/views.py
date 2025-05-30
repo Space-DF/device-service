@@ -199,7 +199,7 @@ class APIDeviceConnectorView(
     serializer_class = DeviceConnectorSerializer
     queryset = DeviceConnector.objects.all()
     filter_backends = [OrderingFilter, SearchFilter]
-    search_fields = ["network_server__id", "name"]
+    search_fields = ["network_server"]
 
     def create(self, request):
         try:
