@@ -30,7 +30,7 @@ def create_connector_mqtt(data):
         "bridge_mode": False,
         "clean_start": True,
         "description": "",
-        "keepalive": "300s",
+        "keepalive": "2s",
         "max_inflight": 32,
         "name": data.get("name"),
         "password": mqtt_config.get("password"),
