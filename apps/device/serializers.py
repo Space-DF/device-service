@@ -17,7 +17,7 @@ class MultiDeviceSerializer(ListSerializer):
         lorawan_objs = []
 
         for item in validated_data:
-            lorawan_data = item.pop("lorawan_devices", None)
+            lorawan_data = item.pop("lorawan_device", None)
             device_obj = Device(**item)
             lorawan_obj = LorawanDevice(device=device_obj, **lorawan_data)
             device_objs.append(device_obj)
@@ -30,9 +30,7 @@ class MultiDeviceSerializer(ListSerializer):
 
 
 class DeviceSerializer(ModelSerializer):
-    lorawan_device = LorawanDeviceSerializer(
-        source="lorawan_devices", many=False, required=False
-    )
+    lorawan_device = LorawanDeviceSerializer(many=False, required=False)
 
     class Meta:
         model = Device
@@ -40,13 +38,33 @@ class DeviceSerializer(ModelSerializer):
         list_serializer_class = MultiDeviceSerializer
 
     def create(self, validated_data):
-        lorawan_data = validated_data.pop("lorawan_devices", None)
+        lorawan_data = validated_data.pop("lorawan_device", None)
         device = Device.objects.create(**validated_data)
 
         if lorawan_data:
             LorawanDevice.objects.create(device=device, **lorawan_data)
 
         return device
+
+    def update(self, instance, validated_data):
+        lorawan_data = validated_data.pop("lorawan_device", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if lorawan_data:
+            lorawan_instance = getattr(instance, "lorawan_device", None)
+            if lorawan_instance:
+                lorawan_serializer = LorawanDeviceSerializer(
+                    instance=lorawan_instance, data=lorawan_data, partial=True
+                )
+                lorawan_serializer.is_valid(raise_exception=True)
+                lorawan_serializer.save()
+            else:
+                LorawanDevice.objects.create(device=instance, **lorawan_data)
+
+        return instance
 
 
 class SpaceDeviceSerializer(ModelSerializer):
