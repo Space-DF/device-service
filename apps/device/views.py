@@ -18,6 +18,9 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     ordering_fields = ["created_at"]
     search_fields = ["status"]
 
+    def get_queryset(self):
+        return Device.objects.select_related("lorawan_device").all()
+
     @swagger_auto_schema(
         method="post",
         request_body=DeviceSerializer(many=True),
