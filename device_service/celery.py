@@ -14,7 +14,6 @@ from common.celery.routing import (
 )
 from django.conf import settings
 from dotenv import load_dotenv
-from kombu import Exchange, Queue
 
 load_dotenv()
 
@@ -26,15 +25,3 @@ setup_organization_task_routing()
 setup_synchronous_model_task_routing()
 
 app.autodiscover_tasks(settings.CELERY_TASKS)
-
-app.conf.task_queues = app.conf.task_queues + (
-    Queue(
-        "new_action_output",
-        exchange=Exchange("new_action_output", type="direct"),
-        routing_key="spacedf.tasks.new_action_output",
-    ),
-)
-app.conf.task_routes["spacedf.tasks.new_action_output"] = {
-    "queue": "new_action_output",
-    "routing_key": "spacedf.tasks.new_action_output",
-}
