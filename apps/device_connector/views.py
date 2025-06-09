@@ -26,11 +26,11 @@ from apps.rule.resource.models import Resource
 
 class ConnectorStrategy(ABC):
     @abstractmethod
-    def create_connector(self, data):
+    def create_connector(self, data, slug_name):
         pass
 
     @abstractmethod
-    def delete_connector(self, connector_id):
+    def delete_connector(self, connector_id, slug_name):
         pass
 
     @abstractmethod
@@ -45,7 +45,7 @@ class ConnectorStrategy(ABC):
 class MqttConnectorStrategy(ConnectorStrategy):
 
     @transaction.atomic
-    def create_connector(self, data):
+    def create_connector(self, data, slug_name):
         mqtt_config = data.get("device_mqtt_config")
         if not mqtt_config:
             transaction.set_rollback(True)
@@ -82,8 +82,7 @@ class MqttConnectorStrategy(ConnectorStrategy):
             resource_opts=result_create_resource.get("resource_opts"),
             type=result_create_resource.get("type"),
         )
-
-        action = Action.objects.filter(name="action_default").first()
+        action = Action.objects.filter(name=f"action_{slug_name}_default").first()
         result_create_rule = create_rule_mqtt(data, action)
         if not result_create_rule:
             delete_resource_mqtt(result_create_resource.get("name"))
@@ -100,7 +99,7 @@ class MqttConnectorStrategy(ConnectorStrategy):
 
         return DeviceConnectorSerializer(device_connector).data
 
-    def delete_connector(self, connector):
+    def delete_connector(self, connector, slug_name):
         device_rule = Definition.objects.filter(
             resource__device_connector=connector
         ).first()
@@ -113,7 +112,7 @@ class MqttConnectorStrategy(ConnectorStrategy):
         result_delete_resource = delete_resource_mqtt(device_resource.name)
         serializer = DeviceConnectorSerializer(connector)
         if not result_delete_resource:
-            action = Action.objects.filter(name="action_default").first()
+            action = Action.objects.filter(name=f"action_{slug_name}_default").first()
             result = create_rule_mqtt(serializer.data, action)
             device_rule.rule_id = result.get("id")
             device_rule.save()
@@ -121,7 +120,7 @@ class MqttConnectorStrategy(ConnectorStrategy):
 
         result_delete_connector = delete_connector_mqtt(connector.name)
         if not result_delete_connector:
-            action = Action.objects.filter(name="action_default").first()
+            action = Action.objects.filter(name=f"action_{slug_name}_default").first()
             create_resource_mqtt(serializer.data)
             result = create_rule_mqtt(serializer.data, action)
             device_rule.rule_id = result.get("id")
@@ -207,7 +206,8 @@ class APIDeviceConnectorView(
             serializer.is_valid(raise_exception=True)
             connector_type = request.data.get("connector_type")
             connector = ConnectorFactory.get_strategy(connector_type)
-            response = connector.create_connector(serializer.validated_data)
+            slug_name = request.tenant.slug_name
+            response = connector.create_connector(serializer.validated_data, slug_name)
             if response is None:
                 return Response(
                     {"error": "Failed to create connector."},
@@ -226,7 +226,8 @@ class APIDeviceConnectorView(
         connector_factory = ConnectorFactory.get_strategy(
             device_connector.connector_type
         )
-        connector_factory.delete_connector(device_connector)
+        slug_name = request.tenant.slug_name
+        connector_factory.delete_connector(device_connector, slug_name)
         return Response(
             {"message": "Delete the connector successful"},
             status=status.HTTP_204_NO_CONTENT,

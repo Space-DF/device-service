@@ -9,6 +9,8 @@ def test_connect_mqtt(name, server, username, password):
         "username": username,
         "password": password,
         "proto_ver": "v3",
+        "keepalive": "0s",
+        "pool_size": 1,
         "type": "mqtt",
     }
 
@@ -34,7 +36,7 @@ def create_connector_mqtt(data):
         "max_inflight": 32,
         "name": data.get("name"),
         "password": mqtt_config.get("password"),
-        "pool_size": 8,
+        "pool_size": 1,
         "proto_ver": "v3",
         "resource_opts": {"health_check_interval": "15s", "start_timeout": "5s"},
         "retry_interval": "15s",
@@ -86,7 +88,7 @@ def create_rule_mqtt(data, action):
         "actions": [name_action],
         "description": "",
         "name": "rule_" + data.get("name"),
-        "sql": f'SELECT\n  *\nFROM\n  "t/#",\n  "$bridges/mqtt:{name_resource}"',  # nosec
+        "sql": f'SELECT\n  json_decode(payload) as payload\nFROM\n  "t/#",\n  "$bridges/mqtt:{name_resource}"',  # nosec
     }
 
     try:
