@@ -38,7 +38,6 @@ class EMQXRequest:
         headers["Authorization"] = f"Bearer {token}"
 
         response = requests.request(method, url, headers=headers, timeout=5, **kwargs)
-        print("response", url, headers, kwargs, response.status_code, response.text)
 
         if response.status_code == 401:
             token = self._get_valid_token(force_refresh=True)
