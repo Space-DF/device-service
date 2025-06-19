@@ -149,6 +149,7 @@ CELERY_TASKS = [
 ]
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost")
 NEW_ORGANIZATION_HANDLER = "apps.device.handlers.NewOrganizationHandler"
+DELETE_ORGANIZATION_HANDLER = "apps.device.handlers.DeleteOrganizationHandler"
 
 # Middleware settings
 PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static"]

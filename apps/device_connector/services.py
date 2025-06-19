@@ -1,3 +1,4 @@
+from apps.device.services import delete_action_http
 from emqx.requests import EMQXRequest
 
 
@@ -88,7 +89,7 @@ def create_rule_mqtt(data, action):
         "actions": [name_action],
         "description": "",
         "name": "rule_" + data.get("name"),
-        "sql": f'SELECT\n  json_decode(payload) as payload\nFROM\n  "t/#",\n  "$bridges/mqtt:{name_resource}"',  # nosec
+        "sql": f'SELECT\n  json_decode(payload) as payload\nFROM\n "$bridges/mqtt:{name_resource}"',  # nosec
     }
 
     try:
@@ -136,3 +137,44 @@ def delete_rule_mqtt(rule_id):
         return True
     except Exception:
         return None
+
+
+def get_rule(rule_id):
+    url = f"{EMQXRequest.EMQX_API_URL}/rules/{rule_id}"
+    try:
+        resp = EMQXRequest().request_get(url)
+        return resp.json()
+    except Exception:
+        return None
+
+
+def get_resource(resource_name):
+    url = f"{EMQXRequest.EMQX_API_URL}/sources/mqtt%3A{resource_name}"
+    try:
+        resp = EMQXRequest().request_get(url)
+        return resp.json()
+    except Exception:
+        return None
+
+
+def delete_all_by_rule(rule_id):
+    rule_data = get_rule(rule_id)
+    actions = rule_data.get("actions", [])
+    sources = rule_data.get("from", [])
+    delete_rule_mqtt(rule_id)
+
+    if sources[0].startswith("$bridges/mqtt:"):
+        try:
+            resource_data = get_resource(sources[0].split("$bridges/mqtt:")[1])
+            connector_name = resource_data.get("connector")
+        except Exception:
+            connector_name = None
+
+        delete_resource_mqtt(sources[0].split("$bridges/mqtt:")[1])
+        if connector_name:
+            delete_connector_mqtt(connector_name)
+
+    if actions[0].startswith("http:"):
+        action_name = actions[0].split("http:")[1]
+        delete_action_http(action_name)
+    return True
