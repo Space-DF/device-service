@@ -1,9 +1,14 @@
-from common.apps.organization.handler import NewOrganizationHandlerBase
+from common.apps.organization.handler import (
+    DeleteOrganizationHandlerBase,
+    NewOrganizationHandlerBase,
+)
 from django.db import transaction
 from django_tenants.utils import schema_context
 
 from apps.device.services import create_action_http
+from apps.device_connector.services import delete_action_http, delete_all_by_rule
 from apps.rule.action.models import Action
+from apps.rule.definition.models import Definition
 
 
 class NewOrganizationHandler(NewOrganizationHandlerBase):
@@ -21,3 +26,14 @@ class NewOrganizationHandler(NewOrganizationHandlerBase):
                 parameters=result_create_action.get("parameters"),
                 resource_opts=result_create_action.get("resource_opts"),
             )
+
+
+class DeleteOrganizationHandler(DeleteOrganizationHandlerBase):
+    def handle(self):
+        with schema_context(self._organization.slug_name):
+            definitions = Definition.objects.all()
+            if definitions:
+                for definition in definitions:
+                    delete_all_by_rule(definition.rule_id)
+            else:
+                delete_action_http(f"action_{self._organization.slug_name}_default")
