@@ -2,7 +2,6 @@ import uuid
 
 from common.apps.space.models import BaseModel, Space
 from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.device_connector.models import DeviceConnector
@@ -78,11 +77,3 @@ class DeviceTransformedData(models.Model):
             ),
         ]
         ordering = ["-timestamp"]
-
-    def save(self, *args, **kwargs):
-        # Allow creation but not updates
-        if self.pk is not None:
-            raise ValidationError(
-                "Records in DeviceTransformedData cannot be modified after creation."
-            )
-        super().save(*args, **kwargs)

@@ -1,12 +1,16 @@
 from common.pagination.base_pagination import BasePagination
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
-from apps.device.models import Device, SpaceDevice
-from apps.device.serializers import DeviceSerializer, SpaceDeviceSerializer
+from apps.device.models import Device, DeviceTransformedData, SpaceDevice
+from apps.device.serializers import (
+    DeviceSerializer,
+    DeviceTransformedDataSerializer,
+    SpaceDeviceSerializer,
+)
 from apps.device_model.views import UseTenantFromRequestMixin
 
 
@@ -43,3 +47,15 @@ class SpaceDeviceViewSet(viewsets.ModelViewSet):
     queryset = SpaceDevice.objects.all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
+
+
+class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only API endpoint for viewing DeviceTransformedData.
+    Public: No authentication or permission restrictions.
+    Supports GET (list) and GET (retrieve) only.
+    """
+
+    queryset = DeviceTransformedData.objects.all()
+    serializer_class = DeviceTransformedDataSerializer
+    permission_classes = [permissions.AllowAny]
