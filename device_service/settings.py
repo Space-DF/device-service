@@ -153,7 +153,7 @@ NEW_ORGANIZATION_HANDLER = "apps.device.handlers.NewOrganizationHandler"
 DELETE_ORGANIZATION_HANDLER = "apps.device.handlers.DeleteOrganizationHandler"
 
 # Transformer ingestion queue/routing config
-TRANSFORMER_AMQP_EXCHANGE = os.getenv("TRANSFORMER_AMQP_EXCHANGE", "amq.topic")
+TRANSFORMER_AMQP_EXCHANGE = os.getenv("TRANSFORMER_AMQP_EXCHANGE", "")
 TRANSFORMER_AMQP_ROUTING_KEY = os.getenv(
     "TRANSFORMER_AMQP_ROUTING_KEY", "transformed/device/location"
 )
