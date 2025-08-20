@@ -11,7 +11,6 @@ def delete_connector_default(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("device", "0003_alter_lorawandevice_device"),
     ]
