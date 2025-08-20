@@ -2,6 +2,7 @@ import uuid
 
 from common.apps.space.models import BaseModel, Space
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.device_connector.models import DeviceConnector
@@ -58,3 +59,30 @@ class SpaceDevice(BaseModel):
             models.Index(fields=["name"]),
             models.Index(fields=["slug_name"]),
         ]
+
+
+class DeviceTransformedData(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data = models.JSONField(help_text="Actual device transformed data", editable=False)
+    timestamp = models.DateTimeField(db_index=True)
+    source = models.CharField(max_length=64, null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    device_reference = models.CharField(max_length=255, default="unknown")
+    # === DENORMALIZED FIELDS FOR PERFORMANCE ===
+    device_eui = models.CharField(max_length=255, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["device_eui", "timestamp"], name="device_timestamp_idx"
+            ),
+        ]
+        ordering = ["-timestamp"]
+
+    def save(self, *args, **kwargs):
+        # Allow creation but not updates
+        if self.pk is not None:
+            raise ValidationError(
+                "Records in DeviceTransformedData cannot be modified after creation."
+            )
+        super().save(*args, **kwargs)

@@ -1,7 +1,7 @@
 from django.db import transaction
 from rest_framework.serializers import ListSerializer, ModelSerializer
 
-from apps.device.models import Device, LorawanDevice, SpaceDevice
+from apps.device.models import Device, DeviceTransformedData, LorawanDevice, SpaceDevice
 
 
 class LorawanDeviceSerializer(ModelSerializer):
@@ -70,4 +70,10 @@ class DeviceSerializer(ModelSerializer):
 class SpaceDeviceSerializer(ModelSerializer):
     class Meta:
         model = SpaceDevice
+        fields = "__all__"
+
+
+class DeviceTransformedDataSerializer(ModelSerializer):
+    class Meta:
+        model = DeviceTransformedData
         fields = "__all__"

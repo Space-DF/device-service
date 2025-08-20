@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("device", "0002_device_device_connector_device_status_and_more"),
     ]

@@ -4,7 +4,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("device_connector", "0003_alter_deviceconnector_network_server"),
         ("network_server", "0001_initial"),
