@@ -158,7 +158,7 @@ TRANSFORMER_AMQP_ROUTING_KEY = os.getenv(
     "TRANSFORMER_AMQP_ROUTING_KEY", "transformed/device/location"
 )
 TRANSFORMER_DEVICE_QUEUE = os.getenv(
-    "TRANSFORMER_DEVICE_QUEUE", "transformer_device_queue"
+    "TRANSFORMER_DEVICE_QUEUE", "transformed/device/location"
 )
 
 # Middleware settings
