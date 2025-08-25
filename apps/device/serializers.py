@@ -1,7 +1,13 @@
 from django.db import transaction
 from rest_framework.serializers import ListSerializer, ModelSerializer
 
-from apps.device.models import Device, DeviceTransformedData, LorawanDevice, SpaceDevice
+from apps.device.models import (
+    Device,
+    DeviceTransformedData,
+    LorawanDevice,
+    SpaceDevice,
+    Trip,
+)
 
 
 class LorawanDeviceSerializer(ModelSerializer):
@@ -77,3 +83,16 @@ class DeviceTransformedDataSerializer(ModelSerializer):
     class Meta:
         model = DeviceTransformedData
         fields = "__all__"
+
+
+class TripListSerializer(ModelSerializer):
+    class Meta:
+        model = Trip
+        fields = ["id", "space_device", "started_at", "ended_at"]
+
+
+class TripDetailSerializer(TripListSerializer):
+    transformed_data = DeviceTransformedDataSerializer(many=True, read_only=True)
+
+    class Meta(TripListSerializer.Meta):
+        fields = TripListSerializer.Meta.fields + ["transformed_data"]

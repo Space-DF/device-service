@@ -77,3 +77,10 @@ class DeviceTransformedData(models.Model):
             ),
         ]
         ordering = ["-timestamp"]
+
+
+class Trip(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    space_device = models.ForeignKey(SpaceDevice, on_delete=models.PROTECT)
+    started_at = models.DateTimeField(db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True, db_index=True)
