@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("device_model", "0002_remove_devicemodel_device_type"),
     ]

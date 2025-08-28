@@ -43,7 +43,6 @@ class ConnectorStrategy(ABC):
 
 
 class MqttConnectorStrategy(ConnectorStrategy):
-
     @transaction.atomic
     def create_connector(self, data, slug_name):
         mqtt_config = data.get("device_mqtt_config")

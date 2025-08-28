@@ -56,3 +56,29 @@ class SpaceDevice(BaseModel):
         indexes = [
             models.Index(fields=["name"]),
         ]
+
+
+class DeviceTransformedData(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data = models.JSONField(help_text="Actual device transformed data", editable=False)
+    timestamp = models.DateTimeField(db_index=True)
+    source = models.CharField(max_length=64, null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    device_reference = models.CharField(max_length=255, default="unknown")
+    # === DENORMALIZED FIELDS FOR PERFORMANCE ===
+    device_eui = models.CharField(max_length=255, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["device_eui", "timestamp"], name="device_timestamp_idx"
+            ),
+        ]
+        ordering = ["-timestamp"]
+
+
+class Trip(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    space_device = models.ForeignKey(SpaceDevice, on_delete=models.PROTECT)
+    started_at = models.DateTimeField(db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True, db_index=True)
