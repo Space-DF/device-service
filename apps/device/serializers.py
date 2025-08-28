@@ -1,16 +1,16 @@
 from django.db import transaction
-from rest_framework.serializers import ListSerializer, ModelSerializer
+from rest_framework import serializers
 
 from apps.device.models import Device, LorawanDevice, SpaceDevice
 
 
-class LorawanDeviceSerializer(ModelSerializer):
+class LorawanDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = LorawanDevice
         fields = ["name", "dev_eui", "location", "tags"]
 
 
-class MultiDeviceSerializer(ListSerializer):
+class MultiDeviceSerializer(serializers.ListSerializer):
     @transaction.atomic
     def create(self, validated_data):
         device_objs = []
@@ -29,7 +29,7 @@ class MultiDeviceSerializer(ListSerializer):
         return device_objs
 
 
-class DeviceSerializer(ModelSerializer):
+class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
 
     class Meta:
@@ -67,7 +67,10 @@ class DeviceSerializer(ModelSerializer):
         return instance
 
 
-class SpaceDeviceSerializer(ModelSerializer):
+class SpaceDeviceSerializer(serializers.ModelSerializer):
+    device = DeviceSerializer(read_only=True)
+    dev_eui = serializers.CharField(max_length=16, write_only=True)
+
     class Meta:
         model = SpaceDevice
-        fields = "__all__"
+        fields = ["id", "name", "description", "device", "dev_eui"]

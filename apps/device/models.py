@@ -44,7 +44,6 @@ class LorawanDevice(BaseModel):
 class SpaceDevice(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    slug_name = models.SlugField(unique=True)
     description = models.TextField(null=True, blank=True)
     space = models.ForeignKey(
         Space, related_name="space_devices", on_delete=models.CASCADE
@@ -56,5 +55,4 @@ class SpaceDevice(BaseModel):
     class Meta:
         indexes = [
             models.Index(fields=["name"]),
-            models.Index(fields=["slug_name"]),
         ]
