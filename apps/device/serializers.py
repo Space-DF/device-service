@@ -82,13 +82,13 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "device", "dev_eui"]
 
 
-class DeviceTransformedDataSerializer(ModelSerializer):
+class DeviceTransformedDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceTransformedData
         fields = "__all__"
 
 
-class TripListSerializer(ModelSerializer):
+class TripListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Trip
         fields = ["id", "space_device", "started_at", "ended_at"]

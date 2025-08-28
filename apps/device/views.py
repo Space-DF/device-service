@@ -5,6 +5,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
@@ -51,3 +52,207 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
+
+    def _get_space(self):
+        slug_name = self.request.headers.get("X-Space")
+        if not slug_name:
+            raise ParseError("X-Space header is required.")
+        try:
+            return Space.objects.get(slug_name=slug_name)
+        except Space.DoesNotExist:
+            raise NotFound(f"Space with slug_name='{slug_name}' not found.")
+
+    def get_queryset(self):
+        space = self._get_space()
+        return SpaceDevice.objects.filter(space=space).select_related("space", "device")
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        space = self._get_space()
+        dev_eui = serializer.validated_data.pop("dev_eui")
+        device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
+        if not device:
+            return Response(
+                {
+                    "detail": f"Device with dev_eui = {dev_eui} not found in the organization"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if device.status == "active":
+            return Response(
+                {
+                    "detail": f"Device with dev_eui = {dev_eui} not found in the inventory"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        device.status = "active"
+        device.save()
+        serializer.save(space=space, device=device)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class DeleteSpaceDeviceViewSet(generics.DestroyAPIView):
+    serializer_class = SpaceDeviceSerializer
+    lookup_field = "id"
+    queryset = SpaceDevice.objects.all()
+
+class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = DeviceTransformedData.objects.all()
+    serializer_class = DeviceTransformedDataSerializer
+
+
+class TripViewSet(viewsets.ModelViewSet):
+    pagination_class = BasePagination
+
+    def get_queryset(self):
+        space_slug_name = self.request.headers.get("X-Space", None)
+        if space_slug_name is None:
+            raise ParseError("X-Space header is required")
+
+        filters = {
+            "space_device__space__slug_name": space_slug_name,
+            "space_device__space__is_active": True,
+        }
+
+        queryset = Trip.objects.filter(**filters).select_related("space_device__space")
+        if self._should_include_transformed_data():
+            queryset = queryset.select_related(
+                "space_device",
+                "space_device__device",
+                "space_device__device__lorawan_device",
+            )
+        return queryset
+
+    def get_serializer_class(self):
+        return TripDetailSerializer if self.action == "retrieve" else TripListSerializer
+
+    def _should_include_transformed_data(self):
+        include_transformed_data = getattr(self.request, "query_params", {}).get(
+            "include_transformed_data"
+        )
+        return (
+            include_transformed_data is not None
+            and include_transformed_data.lower() == "true"
+        )
+
+    def _extract_trip_metadata(self, trip):
+        return {
+            "trip": trip,
+            "dev_eui": trip.space_device.device.lorawan_device.dev_eui,
+            "start": trip.started_at,
+            "end": trip.ended_at or timezone.now(),
+        }
+
+    def _get_transformed_data_queryset(self, dev_euis, min_start, max_end):
+        return (
+            DeviceTransformedData.objects.only(
+                "id",
+                "timestamp",
+                "data",
+                "source",
+                "metadata",
+                "device_reference",
+                "device_eui",
+            )
+            .filter(
+                device_eui__in=dev_euis,
+                timestamp__gte=min_start,
+                timestamp__lte=max_end,
+            )
+            .order_by("device_eui", "timestamp")
+        )
+
+    def _filter_transformed_data_by_time(self, transformed_data, start_time, end_time):
+        return [
+            data_record
+            for data_record in transformed_data
+            if start_time <= data_record.timestamp <= end_time
+        ]
+
+    def _attach_data_to_trip(self, trip, transformed_data):
+        setattr(trip, "transformed_data", transformed_data)
+
+    def _attach_transformed_data(self, trips):
+        if not trips:
+            return
+
+        is_single_trip = not isinstance(trips, (list, tuple))
+        trip_list = [trips] if is_single_trip else trips
+
+        trip_metadata = [self._extract_trip_metadata(trip) for trip in trip_list]
+
+        if not trip_metadata:
+            return
+
+        dev_euis = list({meta["dev_eui"] for meta in trip_metadata})
+        min_start = min(meta["start"] for meta in trip_metadata)
+        max_end = max(meta["end"] for meta in trip_metadata)
+
+        all_transformed_data = list(
+            self._get_transformed_data_queryset(dev_euis, min_start, max_end)
+        )
+
+        # Group data by device EUI for efficient lookup
+        data_by_eui = {}
+        for data in all_transformed_data:
+            data_by_eui.setdefault(data.device_eui, []).append(data)
+
+        # Filter and attach data to each trip
+        for meta in trip_metadata:
+            eui_data = data_by_eui.get(meta["dev_eui"], [])
+            filtered_data = self._filter_transformed_data_by_time(
+                eui_data, meta["start"], meta["end"]
+            )
+            self._attach_data_to_trip(meta["trip"], filtered_data)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                "include_transformed_data",
+                openapi.IN_QUERY,
+                description="Include DeviceTransformedData in response (true/false)",
+                type=openapi.TYPE_BOOLEAN,
+                default=False,
+            )
+        ]
+    )
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if self._should_include_transformed_data():
+            self._attach_transformed_data(instance)
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                "include_transformed_data",
+                openapi.IN_QUERY,
+                description="Include DeviceTransformedData in response (true/false)",
+                type=openapi.TYPE_BOOLEAN,
+                default=False,
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            if self._should_include_transformed_data():
+                self._attach_transformed_data(page)
+
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        if self._should_include_transformed_data():
+            trips = list(queryset)
+            self._attach_transformed_data(trips)
+            serializer = self.get_serializer(trips, many=True)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+
+        return Response(serializer.data)
