@@ -4,18 +4,17 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('device', '0004_create_connector_http_default'),
+        ("device", "0004_create_connector_http_default"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='spacedevice',
-            name='device_spac_slug_na_013783_idx',
+            model_name="spacedevice",
+            name="device_spac_slug_na_013783_idx",
         ),
         migrations.RemoveField(
-            model_name='spacedevice',
-            name='slug_name',
+            model_name="spacedevice",
+            name="slug_name",
         ),
     ]

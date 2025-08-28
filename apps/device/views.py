@@ -97,6 +97,7 @@ class DeleteSpaceDeviceViewSet(generics.DestroyAPIView):
     lookup_field = "id"
     queryset = SpaceDevice.objects.all()
 
+
 class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DeviceTransformedData.objects.all()
     serializer_class = DeviceTransformedDataSerializer
