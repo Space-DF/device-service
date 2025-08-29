@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 from apps.device.models import Device, DeviceTransformedData, SpaceDevice, Trip
 from apps.device.serializers import (
+    CreateSpaceDeviceSerializer,
     DeviceSerializer,
     DeviceTransformedDataSerializer,
     SpaceDeviceSerializer,
@@ -52,6 +53,11 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return CreateSpaceDeviceSerializer
+        return SpaceDeviceSerializer
 
     def _get_space(self):
         slug_name = self.request.headers.get("X-Space")
@@ -117,7 +123,7 @@ class TripViewSet(viewsets.ModelViewSet):
         }
 
         queryset = Trip.objects.filter(**filters).select_related("space_device__space")
-        if self._should_include_transformed_data():
+        if self._should_include_checkpoints():
             queryset = queryset.select_related(
                 "space_device",
                 "space_device__device",
@@ -128,14 +134,11 @@ class TripViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         return TripDetailSerializer if self.action == "retrieve" else TripListSerializer
 
-    def _should_include_transformed_data(self):
-        include_transformed_data = getattr(self.request, "query_params", {}).get(
-            "include_transformed_data"
+    def _should_include_checkpoints(self):
+        include_checkpoints = getattr(self.request, "query_params", {}).get(
+            "include_checkpoints"
         )
-        return (
-            include_transformed_data is not None
-            and include_transformed_data.lower() == "true"
-        )
+        return include_checkpoints is not None and include_checkpoints.lower() == "true"
 
     def _extract_trip_metadata(self, trip):
         return {
@@ -172,7 +175,7 @@ class TripViewSet(viewsets.ModelViewSet):
         ]
 
     def _attach_data_to_trip(self, trip, transformed_data):
-        setattr(trip, "transformed_data", transformed_data)
+        setattr(trip, "checkpoints", transformed_data)
 
     def _attach_transformed_data(self, trips):
         if not trips:
@@ -210,9 +213,9 @@ class TripViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(
-                "include_transformed_data",
+                "include_checkpoints",
                 openapi.IN_QUERY,
-                description="Include DeviceTransformedData in response (true/false)",
+                description="Include DeviceCheckpoints in response (true/false)",
                 type=openapi.TYPE_BOOLEAN,
                 default=False,
             )
@@ -221,7 +224,7 @@ class TripViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if self._should_include_transformed_data():
+        if self._should_include_checkpoints():
             self._attach_transformed_data(instance)
 
         serializer = self.get_serializer(instance)
@@ -230,9 +233,9 @@ class TripViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(
-                "include_transformed_data",
+                "include_checkpoints",
                 openapi.IN_QUERY,
-                description="Include DeviceTransformedData in response (true/false)",
+                description="Include DeviceCheckpoints in response (true/false)",
                 type=openapi.TYPE_BOOLEAN,
                 default=False,
             )
@@ -243,13 +246,13 @@ class TripViewSet(viewsets.ModelViewSet):
 
         page = self.paginate_queryset(queryset)
         if page is not None:
-            if self._should_include_transformed_data():
+            if self._should_include_checkpoints():
                 self._attach_transformed_data(page)
 
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        if self._should_include_transformed_data():
+        if self._should_include_checkpoints():
             trips = list(queryset)
             self._attach_transformed_data(trips)
             serializer = self.get_serializer(trips, many=True)
