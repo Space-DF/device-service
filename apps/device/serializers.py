@@ -75,17 +75,45 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
+
+    class Meta:
+        model = SpaceDevice
+        fields = ["id", "name", "description", "device"]
+
+
+class CreateSpaceDeviceSerializer(serializers.ModelSerializer):
     dev_eui = serializers.CharField(max_length=16, write_only=True)
 
     class Meta:
         model = SpaceDevice
-        fields = ["id", "name", "description", "device", "dev_eui"]
+        fields = ["name", "description", "dev_eui"]
 
 
 class DeviceTransformedDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceTransformedData
         fields = "__all__"
+
+
+class FormatDeviceTransformedDataSerializer(serializers.ModelSerializer):
+    longitude = serializers.SerializerMethodField()
+    latitude = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeviceTransformedData
+        fields = ["timestamp", "longitude", "latitude"]
+
+    def get_longitude(self, obj):
+        try:
+            return obj.data.get("location", {}).get("longitude")
+        except Exception:
+            return None
+
+    def get_latitude(self, obj):
+        try:
+            return obj.data.get("location", {}).get("latitude")
+        except Exception:
+            return None
 
 
 class TripListSerializer(serializers.ModelSerializer):
@@ -95,7 +123,7 @@ class TripListSerializer(serializers.ModelSerializer):
 
 
 class TripDetailSerializer(TripListSerializer):
-    transformed_data = DeviceTransformedDataSerializer(many=True, read_only=True)
+    checkpoints = FormatDeviceTransformedDataSerializer(many=True, read_only=True)
 
     class Meta(TripListSerializer.Meta):
-        fields = TripListSerializer.Meta.fields + ["transformed_data"]
+        fields = TripListSerializer.Meta.fields + ["checkpoints"]

@@ -5,7 +5,7 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("device", "0004_create_connector_http_default"),
+        ("device", "0006_trip"),
     ]
 
     operations = [
