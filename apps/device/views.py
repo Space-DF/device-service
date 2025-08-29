@@ -19,6 +19,7 @@ from apps.device.serializers import (
     TripListSerializer,
 )
 from apps.device_model.views import UseTenantFromRequestMixin
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
@@ -111,6 +112,8 @@ class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
 
 class TripViewSet(viewsets.ModelViewSet):
     pagination_class = BasePagination
+    filter_backends = [OrderingFilter, DjangoFilterBackend]
+    filterset_fields = ["space_device__device_id"]
 
     def get_queryset(self):
         space_slug_name = self.request.headers.get("X-Space", None)
@@ -238,6 +241,12 @@ class TripViewSet(viewsets.ModelViewSet):
                 description="Include DeviceCheckpoints in response (true/false)",
                 type=openapi.TYPE_BOOLEAN,
                 default=False,
+            ),
+            openapi.Parameter(
+                "space_device__device_id",
+                openapi.IN_QUERY,
+                description="Filter trips by Device ID",
+                type=openapi.TYPE_STRING,
             )
         ]
     )
