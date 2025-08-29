@@ -95,7 +95,7 @@ class DeviceTransformedDataSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class FormatDeviceTransformedDataSerializer(serializers.ModelSerializer):
+class FormatDeviceCheckpointsSerializer(serializers.ModelSerializer):
     longitude = serializers.SerializerMethodField()
     latitude = serializers.SerializerMethodField()
 
@@ -123,7 +123,7 @@ class TripListSerializer(serializers.ModelSerializer):
 
 
 class TripDetailSerializer(TripListSerializer):
-    checkpoints = FormatDeviceTransformedDataSerializer(many=True, read_only=True)
+    checkpoints = FormatDeviceCheckpointsSerializer(many=True, read_only=True)
 
     class Meta(TripListSerializer.Meta):
         fields = TripListSerializer.Meta.fields + ["checkpoints"]
