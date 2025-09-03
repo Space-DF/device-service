@@ -1,6 +1,7 @@
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, status, viewsets
@@ -19,7 +20,6 @@ from apps.device.serializers import (
     TripListSerializer,
 )
 from apps.device_model.views import UseTenantFromRequestMixin
-from django_filters.rest_framework import DjangoFilterBackend
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
@@ -71,7 +71,46 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
 
     def get_queryset(self):
         space = self._get_space()
-        return SpaceDevice.objects.filter(space=space).select_related("space", "device")
+        include_latest_checkpoint = (
+            str(self.request.query_params.get("include_latest_checkpoint", "")).lower()
+            == "true"
+        )
+        queryset = SpaceDevice.objects.filter(space=space).select_related("device")
+        if include_latest_checkpoint:
+            queryset = queryset.select_related("device__lorawan_device")
+        return queryset
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                "include_latest_checkpoint",
+                openapi.IN_QUERY,
+                description="Include get_latest_checkpoint in response (true/false)",
+                type=openapi.TYPE_BOOLEAN,
+                default=False,
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        include_latest_checkpoint = (
+            str(request.query_params.get("include_latest_checkpoint", "")).lower()
+            == "true"
+        )
+        serializer_context = self.get_serializer_context()
+        serializer_context["include_latest_checkpoint"] = include_latest_checkpoint
+
+        if page is not None:
+            serializer = self.get_serializer(
+                page, many=True, context=serializer_context
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(
+            queryset, many=True, context=serializer_context
+        )
+        return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

@@ -75,10 +75,29 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
+    latest_checkpoint = serializers.SerializerMethodField()
 
     class Meta:
         model = SpaceDevice
-        fields = ["id", "name", "description", "device"]
+        fields = ["id", "name", "description", "device", "latest_checkpoint"]
+
+    def get_latest_checkpoint(self, obj):
+        if not self.context.get("include_latest_checkpoint"):
+            return None
+        device = getattr(obj, "device", None)
+        if not device or not hasattr(device, "lorawan_device"):
+            return None
+        dev_eui = getattr(device.lorawan_device, "dev_eui", None)
+        if not dev_eui:
+            return None
+        latest_data = (
+            DeviceTransformedData.objects.filter(device_eui=dev_eui)
+            .order_by("-timestamp")
+            .first()
+        )
+        if not latest_data:
+            return None
+        return FormatDeviceCheckpointsSerializer(latest_data).data
 
 
 class CreateSpaceDeviceSerializer(serializers.ModelSerializer):
