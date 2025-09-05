@@ -174,7 +174,11 @@ class TripViewSet(viewsets.ModelViewSet):
         return queryset
 
     def get_serializer_class(self):
-        return TripDetailSerializer if self.action == "retrieve" else TripListSerializer
+        return (
+            TripDetailSerializer
+            if self.action in ["retrieve", "list"]
+            else TripListSerializer
+        )
 
     def _should_include_checkpoints(self):
         include_checkpoints = getattr(self.request, "query_params", {}).get(
@@ -286,7 +290,7 @@ class TripViewSet(viewsets.ModelViewSet):
                 openapi.IN_QUERY,
                 description="Filter trips by Device ID",
                 type=openapi.TYPE_STRING,
-            )
+            ),
         ]
     )
     def list(self, request, *args, **kwargs):
