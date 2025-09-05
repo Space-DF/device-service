@@ -142,7 +142,9 @@ class TripListSerializer(serializers.ModelSerializer):
 
 
 class TripDetailSerializer(TripListSerializer):
-    checkpoints = FormatDeviceCheckpointsSerializer(many=True, read_only=True)
+    checkpoints = FormatDeviceCheckpointsSerializer(
+        many=True, read_only=True, allow_null=True
+    )
 
     class Meta(TripListSerializer.Meta):
         fields = TripListSerializer.Meta.fields + ["checkpoints"]
