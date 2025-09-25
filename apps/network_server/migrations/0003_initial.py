@@ -6,27 +6,51 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('network_server', '0002_delete_networkserver'),
+        ("network_server", "0002_delete_networkserver"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='NetworkServer',
+            name="NetworkServer",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('name', models.CharField(max_length=255)),
-                ('logo', models.URLField(blank=True, null=True)),
-                ('description', models.CharField(max_length=255)),
-                ('connection_types', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('mqtt_broker', 'MQTT Broker'), ('http_server', 'HTTP Server')], max_length=50, null=True), blank=True, default=list, size=None)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                ("logo", models.URLField(blank=True, null=True)),
+                ("description", models.CharField(max_length=255)),
+                (
+                    "connection_types",
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[
+                                ("mqtt_broker", "MQTT Broker"),
+                                ("http_server", "HTTP Server"),
+                            ],
+                            max_length=50,
+                            null=True,
+                        ),
+                        blank=True,
+                        default=list,
+                        size=None,
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['name'], name='network_ser_name_f2d1be_idx')],
+                "indexes": [
+                    models.Index(fields=["name"], name="network_ser_name_f2d1be_idx")
+                ],
             },
         ),
     ]

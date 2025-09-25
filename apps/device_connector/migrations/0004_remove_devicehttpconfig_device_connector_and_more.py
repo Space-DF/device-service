@@ -5,33 +5,44 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('device', '0008_remove_device_device_connector_and_more'),
-        ('device_connector', '0003_alter_deviceconnector_network_server'),
-        ('network_server', '0003_initial'),
+        ("device", "0008_remove_device_device_connector_and_more"),
+        ("device_connector", "0003_alter_deviceconnector_network_server"),
+        ("network_server", "0003_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='devicehttpconfig',
-            name='device_connector',
+            model_name="devicehttpconfig",
+            name="device_connector",
         ),
         migrations.RemoveField(
-            model_name='devicemqttconfig',
-            name='device_connector',
+            model_name="devicemqttconfig",
+            name="device_connector",
         ),
         migrations.AddField(
-            model_name='devicehttpconfig',
-            name='network_server',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='device_http_configs', to='network_server.networkserver'),
+            model_name="devicehttpconfig",
+            name="network_server",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="device_http_configs",
+                to="network_server.networkserver",
+            ),
         ),
         migrations.AddField(
-            model_name='devicemqttconfig',
-            name='network_server',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='device_mqtt_configs', to='network_server.networkserver'),
+            model_name="devicemqttconfig",
+            name="network_server",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="device_mqtt_configs",
+                to="network_server.networkserver",
+            ),
         ),
         migrations.DeleteModel(
-            name='DeviceConnector',
+            name="DeviceConnector",
         ),
     ]

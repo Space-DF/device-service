@@ -26,6 +26,8 @@ urlpatterns = [
         name="delete_device_spaces",
     ),
     path(
-        "devices/<str:claim_code>/check", FindDeviceByCodeView.as_view(), name="check_device"
+        "devices/<str:claim_code>/check",
+        FindDeviceByCodeView.as_view(),
+        name="check_device",
     ),
 ]

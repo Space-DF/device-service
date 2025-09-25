@@ -5,57 +5,65 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('device', '0007_remove_spacedevice_device_spac_slug_na_013783_idx_and_more'),
-        ('network_server', '0003_initial'),
+        ("device", "0007_remove_spacedevice_device_spac_slug_na_013783_idx_and_more"),
+        ("network_server", "0003_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='device',
-            name='device_connector',
+            model_name="device",
+            name="device_connector",
         ),
         migrations.RemoveField(
-            model_name='lorawandevice',
-            name='location',
+            model_name="lorawandevice",
+            name="location",
         ),
         migrations.RemoveField(
-            model_name='lorawandevice',
-            name='name',
+            model_name="lorawandevice",
+            name="name",
         ),
         migrations.RemoveField(
-            model_name='lorawandevice',
-            name='tags',
+            model_name="lorawandevice",
+            name="tags",
         ),
         migrations.AddField(
-            model_name='device',
-            name='network_server',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='devices', to='network_server.networkserver'),
+            model_name="device",
+            name="network_server",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="devices",
+                to="network_server.networkserver",
+            ),
         ),
         migrations.AddField(
-            model_name='lorawandevice',
-            name='app_key',
+            model_name="lorawandevice",
+            name="app_key",
             field=models.CharField(blank=True, max_length=32, null=True),
         ),
         migrations.AddField(
-            model_name='lorawandevice',
-            name='claim_code',
+            model_name="lorawandevice",
+            name="claim_code",
             field=models.CharField(blank=True, max_length=100, null=True, unique=True),
         ),
         migrations.AddField(
-            model_name='lorawandevice',
-            name='join_eui',
+            model_name="lorawandevice",
+            name="join_eui",
             field=models.CharField(blank=True, max_length=16, null=True),
         ),
         migrations.AlterField(
-            model_name='device',
-            name='status',
-            field=models.CharField(choices=[('active', 'Active'), ('in_inventory', 'In Inventory')], default='in_inventory'),
+            model_name="device",
+            name="status",
+            field=models.CharField(
+                choices=[("active", "Active"), ("in_inventory", "In Inventory")],
+                default="in_inventory",
+            ),
         ),
         migrations.AlterField(
-            model_name='lorawandevice',
-            name='dev_eui',
+            model_name="lorawandevice",
+            name="dev_eui",
             field=models.CharField(max_length=16, unique=True),
         ),
     ]
