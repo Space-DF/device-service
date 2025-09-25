@@ -1,3 +1,4 @@
+from common.utils.custom_fields import HexCharField
 from django.db import transaction
 from rest_framework import serializers
 
@@ -8,12 +9,17 @@ from apps.device.models import (
     SpaceDevice,
     Trip,
 )
+from apps.network_server.serializers import NetworkServerSerializer
 
 
 class LorawanDeviceSerializer(serializers.ModelSerializer):
+    dev_eui = HexCharField(length=16, unique=True)
+    join_eui = HexCharField(length=16)
+    app_key = HexCharField(length=32)
+
     class Meta:
         model = LorawanDevice
-        fields = ["name", "dev_eui", "location", "tags"]
+        fields = ["join_eui", "dev_eui", "app_key", "claim_code"]
 
 
 class MultiDeviceSerializer(serializers.ListSerializer):
@@ -40,7 +46,7 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Device
-        fields = ["id", "device_connector", "device_model", "status", "lorawan_device"]
+        fields = ["id", "network_server", "device_model", "status", "lorawan_device"]
         list_serializer_class = MultiDeviceSerializer
 
     def create(self, validated_data):
@@ -71,6 +77,14 @@ class DeviceSerializer(serializers.ModelSerializer):
                 LorawanDevice.objects.create(device=instance, **lorawan_data)
 
         return instance
+
+
+class GetDeviceSerializer(DeviceSerializer):
+    network_server = NetworkServerSerializer(read_only=True)
+
+    class Meta(DeviceSerializer.Meta):
+        model = Device
+        fields = "__all__"
 
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):

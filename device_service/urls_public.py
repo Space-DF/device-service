@@ -55,6 +55,4 @@ urlpatterns = [
     path("api/", include("apps.device_model.urls", namespace="device_model")),
     path("api/", include("apps.network_server.urls", namespace="network_server")),
     path("api/", include("apps.device.urls", namespace="device")),
-    path("api/", include("apps.device_connector.urls", namespace="device_connector")),
-    path("api/", include("apps.rule.action.urls", namespace="rule_action")),
 ]

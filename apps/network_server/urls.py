@@ -1,9 +1,13 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
-from apps.network_server.views import NetworkServerView
+from apps.network_server.views import NetworkServerViewSet
 
 app_name = "network_server"
 
+router = DefaultRouter()
+router.register("network-server", NetworkServerViewSet)
+
 urlpatterns = [
-    path("network-server/", NetworkServerView.as_view(), name="network_server"),
+    path("", include(router.urls)),
 ]
