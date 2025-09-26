@@ -27,25 +27,68 @@ logger = logging.getLogger(__name__)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "device_service.settings")
 app = Celery("device_service")
+
+# Force topic-based queue configuration BEFORE autodiscovery
+app_events_exchange = Exchange("app.events", type="topic")
+device_queue = Queue(
+    "device-service",
+    exchange=app_events_exchange,
+    routing_key="*.*.*",
+    queue_arguments={"x-single-active-consumer": True},
+)
+
+# Set topic-based configuration BEFORE loading settings
+app.conf.update(
+    task_queues=(device_queue,),
+    task_default_queue="device-service",
+    task_default_exchange="app.events",
+    task_default_exchange_type="topic",
+    task_default_routing_key="*.*.*",
+    task_routes={
+        "spacedf.tasks.new_organization": {
+            "queue": "device-service",
+            "exchange": "app.events",
+            "routing_key": "*.org.created",
+        },
+        "spacedf.tasks.delete_organization": {
+            "queue": "device-service", 
+            "exchange": "app.events",
+            "routing_key": "*.org.deleted",
+        },
+        "spacedf.tasks.update_space": {
+            "queue": "device-service",
+            "exchange": "app.events",
+            "routing_key": "*.space.updated",
+        },
+        "spacedf.tasks.delete_space": {
+            "queue": "device-service",
+            "exchange": "app.events",
+            "routing_key": "*.space.deleted",
+        }
+    }
+)
+
+# Load settings AFTER setting topic-based configuration
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
-setup_organization_task_routing()
-setup_synchronous_model_task_routing()
-
+# Autodiscover tasks
 app.autodiscover_tasks(settings.CELERY_TASKS)
 
-app.conf.task_queues = app.conf.get("task_queues", ()) + (
-    Queue(
-        settings.TRANSFORMER_DEVICE_QUEUE,
-        exchange=Exchange(settings.TRANSFORMER_AMQP_EXCHANGE, type="topic"),
-        routing_key=settings.TRANSFORMER_AMQP_ROUTING_KEY,
-    ),
+# Add transformer queue for device data processing
+transformer_queue = Queue(
+    settings.TRANSFORMER_DEVICE_QUEUE,
+    exchange=Exchange(settings.TRANSFORMER_AMQP_EXCHANGE, type="topic"),
+    routing_key=settings.TRANSFORMER_AMQP_ROUTING_KEY,
 )
-app.conf.task_routes = app.conf.get("task_routes", {})
+
+# Combine topic-based queue with transformer queue
+app.conf.task_queues = (device_queue, transformer_queue)
 app.conf.task_routes["device.ingest_transformed_data"] = {
     "queue": settings.TRANSFORMER_DEVICE_QUEUE,
     "routing_key": settings.TRANSFORMER_AMQP_ROUTING_KEY,
 }
+for queue in app.conf.task_queues:
+    print(f"  {queue.name}: {queue.routing_key}")
 
 
 class TransformerConsumerStep(bootsteps.ConsumerStep):

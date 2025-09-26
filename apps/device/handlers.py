@@ -13,7 +13,7 @@ from apps.rule.definition.models import Definition
 
 class NewOrganizationHandler(NewOrganizationHandlerBase):
     @transaction.atomic
-    def handle(self):
+    def handle(self, tenant_slug=None):
         with schema_context(self._organization.slug_name):
             result_create_action = create_action_http(self._organization.slug_name)
             if not result_create_action:
@@ -29,7 +29,7 @@ class NewOrganizationHandler(NewOrganizationHandlerBase):
 
 
 class DeleteOrganizationHandler(DeleteOrganizationHandlerBase):
-    def handle(self):
+    def handle(self, tenant_slug=None):
         with schema_context(self._organization.slug_name):
             definitions = Definition.objects.all()
             if definitions:
