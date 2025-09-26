@@ -1,13 +1,12 @@
 from django.db import migrations
-from apps.device.services import create_connector_http, delete_connector_http
 
 
 def create_connector_default(apps, schema_editor):
-    create_connector_http("connector_http_default")
+    pass
 
 
 def delete_connector_default(apps, schema_editor):
-    delete_connector_http("connector_http_default")
+    pass
 
 
 class Migration(migrations.Migration):

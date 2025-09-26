@@ -5,6 +5,7 @@ from apps.device.views import (
     DeleteSpaceDeviceViewSet,
     DeviceTransformedDataViewSet,
     DeviceViewSet,
+    FindDeviceByCodeView,
     ListCreateSpaceDeviceViewSet,
     TripViewSet,
 )
@@ -23,5 +24,10 @@ urlpatterns = [
         "device-spaces/<str:id>",
         DeleteSpaceDeviceViewSet.as_view(),
         name="delete_device_spaces",
+    ),
+    path(
+        "devices/<str:claim_code>/check",
+        FindDeviceByCodeView.as_view(),
+        name="check_device",
     ),
 ]

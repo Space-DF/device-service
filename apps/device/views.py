@@ -4,17 +4,19 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
+from apps.device.contants import DeviceStatus
 from apps.device.models import Device, DeviceTransformedData, SpaceDevice, Trip
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
     DeviceTransformedDataSerializer,
+    GetDeviceSerializer,
     SpaceDeviceSerializer,
     TripDetailSerializer,
     TripListSerializer,
@@ -24,11 +26,15 @@ from apps.device_model.views import UseTenantFromRequestMixin
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     queryset = Device.objects.all()
-    serializer_class = DeviceSerializer
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter]
     ordering_fields = ["created_at"]
     search_fields = ["status"]
+
+    def get_serializer_class(self):
+        if self.action in ["list", "retrieve"]:
+            return GetDeviceSerializer
+        return DeviceSerializer
 
     def get_queryset(self):
         return Device.objects.select_related("lorawan_device").all()
@@ -120,22 +126,35 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
         device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
         if not device:
             return Response(
-                {
-                    "detail": f"Device with dev_eui = {dev_eui} not found in the organization"
-                },
+                {"detail": f"Device with dev_eui = {dev_eui} not in the organization"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if device.status == "active":
+        if device.status == DeviceStatus.ACTIVE:
             return Response(
-                {
-                    "detail": f"Device with dev_eui = {dev_eui} not found in the inventory"
-                },
+                {"detail": f"Device with dev_eui = {dev_eui} not in the inventory"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        device.status = "active"
+        device.status = DeviceStatus.ACTIVE
         device.save()
         serializer.save(space=space, device=device)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class FindDeviceByCodeView(views.APIView):
+    def get(self, request, *args, **kwargs):
+        claim_code = kwargs.get("claim_code")
+        device = Device.objects.filter(lorawan_device__claim_code=claim_code).first()
+        if not device:
+            return Response(
+                {"result": "The device not found in the organization!"},
+                status.HTTP_404_NOT_FOUND,
+            )
+        if device.status != DeviceStatus.IN_INVENTORY:
+            return Response(
+                {"result": "The device has been used elsewhere!"},
+                status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(DeviceSerializer(device).data, status=200)
 
 
 class DeleteSpaceDeviceViewSet(generics.DestroyAPIView):
@@ -155,6 +174,8 @@ class TripViewSet(viewsets.ModelViewSet):
     filterset_fields = ["space_device__device_id"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return None
         space_slug_name = self.request.headers.get("X-Space", None)
         if space_slug_name is None:
             raise ParseError("X-Space header is required")

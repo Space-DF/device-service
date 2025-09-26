@@ -45,9 +45,6 @@ TENANT_APPS = [
     "apps.device_model",
     "apps.device",
     "apps.device_connector",
-    "apps.rule.resource",
-    "apps.rule.definition",
-    "apps.rule.action",
     "apps.network_server",
 ]
 
@@ -150,7 +147,6 @@ CELERY_TASKS = [
 ]
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost")
 NEW_ORGANIZATION_HANDLER = "apps.device.handlers.NewOrganizationHandler"
-DELETE_ORGANIZATION_HANDLER = "apps.device.handlers.DeleteOrganizationHandler"
 
 # Transformer ingestion queue/routing config
 TRANSFORMER_AMQP_EXCHANGE = os.getenv("TRANSFORMER_AMQP_EXCHANGE", "")

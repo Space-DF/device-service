@@ -1,32 +1,27 @@
 import uuid
 
 from common.apps.space.models import BaseModel, Space
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
-from apps.device_connector.models import DeviceConnector
+from apps.device.contants import DeviceStatus
 from apps.device_model.models import DeviceModel
+from apps.network_server.models import NetworkServer
 
 
 class Device(BaseModel):
-    DEVICE_STATUS = (
-        ("active", "Active"),
-        ("in_inventory", "In Inventory"),
-    )
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    device_connector = models.ForeignKey(
-        DeviceConnector,
+    network_server = models.ForeignKey(
+        NetworkServer,
         related_name="devices",
         on_delete=models.CASCADE,
-        null=True,
         blank=True,
+        null=True,
     )
     device_model = models.ForeignKey(
         DeviceModel, related_name="devices", on_delete=models.CASCADE
     )
     status = models.CharField(
-        choices=DEVICE_STATUS, max_length=50, default="in_inventory"
+        choices=DeviceStatus.choices, default=DeviceStatus.IN_INVENTORY
     )
 
 
@@ -35,10 +30,10 @@ class LorawanDevice(BaseModel):
     device = models.OneToOneField(
         Device, related_name="lorawan_device", on_delete=models.CASCADE
     )
-    name = models.CharField(max_length=255, unique=True)
-    dev_eui = models.CharField(max_length=255, unique=True)
-    location = models.CharField(max_length=255)
-    tags = ArrayField(models.CharField(max_length=256))
+    dev_eui = models.CharField(max_length=16, unique=True)
+    join_eui = models.CharField(max_length=16, null=True, blank=True)
+    app_key = models.CharField(max_length=32, null=True, blank=True)
+    claim_code = models.CharField(max_length=100, null=True, blank=True, unique=True)
 
 
 class SpaceDevice(BaseModel):
