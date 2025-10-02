@@ -122,6 +122,12 @@ class CreateSpaceDeviceSerializer(serializers.ModelSerializer):
         fields = ["name", "description", "dev_eui"]
 
 
+class UpdateSpaceDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpaceDevice
+        fields = ["name", "description"]
+
+
 class DeviceTransformedDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceTransformedData

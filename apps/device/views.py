@@ -20,6 +20,7 @@ from apps.device.serializers import (
     SpaceDeviceSerializer,
     TripDetailSerializer,
     TripListSerializer,
+    UpdateSpaceDeviceSerializer,
 )
 from apps.device_model.views import UseTenantFromRequestMixin
 
@@ -157,10 +158,14 @@ class FindDeviceByCodeView(views.APIView):
         return Response(DeviceSerializer(device).data, status=200)
 
 
-class DeleteSpaceDeviceViewSet(generics.DestroyAPIView):
-    serializer_class = SpaceDeviceSerializer
+class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "id"
     queryset = SpaceDevice.objects.all()
+
+    def get_serializer_class(self):
+        if self.request.method == "GET":
+            return SpaceDeviceSerializer
+        return UpdateSpaceDeviceSerializer
 
 
 class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):

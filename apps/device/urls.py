@@ -23,7 +23,7 @@ urlpatterns = [
     path(
         "device-spaces/<str:id>",
         DeleteSpaceDeviceViewSet.as_view(),
-        name="delete_device_spaces",
+        name="delete_update_device_spaces",
     ),
     path(
         "devices/<str:claim_code>/check",
