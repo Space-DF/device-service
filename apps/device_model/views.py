@@ -48,4 +48,4 @@ class DeviceModelViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter]
     ordering_fields = ["name"]
-    search_fields = ["name", "alias"]
+    search_fields = ["name", "device_type"]
