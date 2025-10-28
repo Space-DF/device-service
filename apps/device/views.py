@@ -16,6 +16,7 @@ from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
     DeviceTransformedDataSerializer,
+    FormatDeviceSerializer,
     GetDeviceSerializer,
     SpaceDeviceSerializer,
     TripDetailSerializer,
@@ -338,3 +339,23 @@ class TripViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
+
+
+class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
+    serializer_class = FormatDeviceSerializer
+    lookup_field = "lorawan_device__dev_eui"
+    lookup_url_kwarg = "dev_eui"
+    queryset = Device.objects.select_related(
+        "device_model", "lorawan_device"
+    ).prefetch_related("space_devices")
+
+    def get(self, request, *args, **kwargs):
+        try:
+            device = self.get_object()
+        except Device.DoesNotExist:
+            dev_eui = kwargs.get(self.lookup_url_kwarg)
+            return Response(
+                {"detail": f"Device with DevEUI '{dev_eui}' not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(self.get_serializer(device).data, status=status.HTTP_200_OK)

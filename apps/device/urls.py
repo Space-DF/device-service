@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.device.views import (
     DeleteSpaceDeviceViewSet,
+    DeviceLookupView,
     DeviceTransformedDataViewSet,
     DeviceViewSet,
     FindDeviceByCodeView,
@@ -29,5 +30,10 @@ urlpatterns = [
         "devices/<str:claim_code>/check",
         FindDeviceByCodeView.as_view(),
         name="check_device",
+    ),
+    path(
+        "devices/<str:dev_eui>/internal",
+        DeviceLookupView.as_view(),
+        name="device_lookup",
     ),
 ]
