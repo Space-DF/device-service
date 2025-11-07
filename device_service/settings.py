@@ -23,6 +23,10 @@ SECRET_KEY = os.getenv(
 ALLOWED_HOSTS = [os.getenv("ALLOWED_HOSTS", "*")]
 HOST = os.getenv("HOST", "http://localhost:8000/")
 DEFAULT_TENANT_HOST = os.getenv("DEFAULT_TENANT_HOST", "localhost")
+AUTH_URL = os.getenv("AUTH_URL", "http://auth/api/auth/permissions/check")
+CONSOLE_AUTH_URL = os.getenv(
+    "CONSOLE_AUTH_URL", "http://console/api/console/auth/permissions/check"
+)
 
 # Application definition
 SHARED_APPS = [

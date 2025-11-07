@@ -24,22 +24,32 @@ from apps.device.serializers import (
     UpdateSpaceDeviceSerializer,
 )
 from apps.device_model.views import UseTenantFromRequestMixin
+from utils.permissions_classes import (
+    IsOrganizationAdmin,
+    IsOrganizationEditor,
+    IsSpaceAdmin,
+    IsSpaceEditor,
+)
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = Device.objects.all()
+    queryset = Device.objects.select_related("lorawan_device").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter]
     ordering_fields = ["created_at"]
     search_fields = ["status"]
 
+    def get_permissions(self):
+        if self.action in ["update", "partial_update"]:
+            return [IsOrganizationEditor()]
+        if self.request.method in ["destroy"]:
+            return [IsOrganizationAdmin()]
+        return super().get_permissions()
+
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return GetDeviceSerializer
         return DeviceSerializer
-
-    def get_queryset(self):
-        return Device.objects.select_related("lorawan_device").all()
 
     @swagger_auto_schema(
         method="post",
@@ -62,6 +72,11 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
+
+    def get_permissions(self):
+        if self.request.method in ["POST"]:
+            return [IsSpaceAdmin()]
+        return super().get_permissions()
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -162,6 +177,13 @@ class FindDeviceByCodeView(views.APIView):
 class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "id"
     queryset = SpaceDevice.objects.all()
+
+    def get_permissions(self):
+        if self.request.method in ["PUT", "PATCH"]:
+            return [IsSpaceEditor()]
+        if self.request.method in ["DELETE"]:
+            return [IsSpaceAdmin()]
+        return super().get_permissions()
 
     def get_serializer_class(self):
         if self.request.method == "GET":
