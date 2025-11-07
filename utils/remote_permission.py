@@ -1,6 +1,7 @@
+from urllib.parse import urlsplit
+
 import requests
 from rest_framework.permissions import BasePermission
-from urllib.parse import urlsplit
 
 
 class RemotePermission(BasePermission):
@@ -30,5 +31,5 @@ class RemotePermission(BasePermission):
             resp = requests.post(self.auth_url, json=data, headers=headers, timeout=2)
             resp.raise_for_status()
             return resp.json().get("allowed", False)
-        except requests.RequestException as e:
+        except requests.RequestException:
             return False
