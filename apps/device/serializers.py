@@ -43,7 +43,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 
 class FormatDeviceSerializer(serializers.ModelSerializer):
     device_id = serializers.UUIDField(read_only=True, source="lorawan_device.id")
-    device_profile = serializers.CharField(source="device_model.name", read_only=True)
+    device_profile = serializers.CharField(source="device_model.device_type", read_only=True)
     space_id = serializers.UUIDField(
         allow_null=True, source="space_devices.id", read_only=True
     )
