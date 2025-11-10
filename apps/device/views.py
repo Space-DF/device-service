@@ -1,5 +1,6 @@
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
@@ -9,7 +10,6 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
-from django.db.models import OuterRef, Subquery
 
 from apps.device.contants import DeviceStatus
 from apps.device.models import Device, DeviceTransformedData, SpaceDevice, Trip
@@ -353,9 +353,9 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
     def get_queryset(self):
         qs = super().get_queryset()
         space_slug = Subquery(
-            SpaceDevice.objects
-            .filter(device_id=OuterRef("pk"))
-            .values("space__slug_name")[:1]
+            SpaceDevice.objects.filter(device_id=OuterRef("pk")).values(
+                "space__slug_name"
+            )[:1]
         )
 
         return qs.annotate(space_slug=space_slug)
