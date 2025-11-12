@@ -1,8 +1,8 @@
 from common.pagination.base_pagination import BasePagination
+from common.utils.switch_tenant import UseTenantFromRequestMixin
 from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 
-from apps.device_model.views import UseTenantFromRequestMixin
 from apps.network_server.models import NetworkServer
 from apps.network_server.serializers import NetworkServerSerializer
 
