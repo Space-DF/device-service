@@ -1,5 +1,6 @@
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
+from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
@@ -348,6 +349,16 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
     queryset = Device.objects.select_related(
         "device_model", "lorawan_device"
     ).prefetch_related("space_devices")
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        space_slug = Subquery(
+            SpaceDevice.objects.filter(device_id=OuterRef("pk")).values(
+                "space__slug_name"
+            )[:1]
+        )
+
+        return qs.annotate(space_slug=space_slug)
 
     def get(self, request, *args, **kwargs):
         try:
