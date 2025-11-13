@@ -1,5 +1,6 @@
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
+from common.utils.switch_tenant import UseTenantFromRequestMixin
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -24,7 +25,6 @@ from apps.device.serializers import (
     TripListSerializer,
     UpdateSpaceDeviceSerializer,
 )
-from apps.device_model.views import UseTenantFromRequestMixin
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
