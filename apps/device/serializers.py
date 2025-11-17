@@ -9,6 +9,7 @@ from apps.device.models import (
     SpaceDevice,
     Trip,
 )
+from apps.device_model.serializers import DeviceModelSerializer
 from apps.network_server.serializers import NetworkServerSerializer
 
 
@@ -93,6 +94,7 @@ class DeviceSerializer(serializers.ModelSerializer):
 
 class GetDeviceSerializer(DeviceSerializer):
     network_server = NetworkServerSerializer(read_only=True)
+    device_model = DeviceModelSerializer(read_only=True)
 
     class Meta(DeviceSerializer.Meta):
         model = Device
