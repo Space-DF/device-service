@@ -23,6 +23,7 @@ class Device(BaseModel):
     status = models.CharField(
         choices=DeviceStatus.choices, default=DeviceStatus.IN_INVENTORY
     )
+    is_published = models.BooleanField(default=False)
 
 
 class LorawanDevice(BaseModel):
