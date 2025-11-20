@@ -59,7 +59,14 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Device
-        fields = ["id", "network_server", "device_model", "status", "lorawan_device"]
+        fields = [
+            "id",
+            "network_server",
+            "device_model",
+            "status",
+            "lorawan_device",
+            "is_published",
+        ]
         list_serializer_class = MultiDeviceSerializer
 
     def create(self, validated_data):
