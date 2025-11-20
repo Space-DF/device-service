@@ -28,19 +28,17 @@ from apps.device.serializers import (
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = Device.objects.all()
+    queryset = Device.objects.select_related("lorawan_device").all()
     pagination_class = BasePagination
-    filter_backends = [OrderingFilter, SearchFilter]
+    filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
-    search_fields = ["status"]
+    search_fields = ["lorawan_device__dev_eui"]
+    filterset_fields = ["status"]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return GetDeviceSerializer
         return DeviceSerializer
-
-    def get_queryset(self):
-        return Device.objects.select_related("lorawan_device").all()
 
     @swagger_auto_schema(
         method="post",
