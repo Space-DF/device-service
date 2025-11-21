@@ -76,4 +76,7 @@ class Trip(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     space_device = models.ForeignKey(SpaceDevice, on_delete=models.PROTECT)
     started_at = models.DateTimeField(db_index=True)
-    ended_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    is_finished = models.BooleanField(default=False, db_index=True)
+    last_latitude = models.FloatField(null=True, blank=True)
+    last_longitude = models.FloatField(null=True, blank=True)
+    last_report = models.DateTimeField(null=True, blank=True, db_index=True)  # Last data point timestamp

@@ -15,6 +15,7 @@ ARG CELERY_BROKER_URL
 ARG EMQX_HOST
 ARG USERNAME
 ARG PASSWORD
+ARG TELEMETRY_SERVICE_URL
 
 # Allows docker to cache installed dependencies between builds
 COPY ./device-service/requirements.txt requirements.txt
@@ -45,6 +46,7 @@ ENV CELERY_BROKER_URL=${CELERY_BROKER_URL}
 ENV EMQX_HOST=${EMQX_HOST}
 ENV USERNAME=${USERNAME}
 ENV PASSWORD=${PASSWORD}
+ENV TELEMETRY_SERVICE_URL=${TELEMETRY_SERVICE_URL}
 
 RUN ["chmod", "+x", "./docker-entrypoint.sh"]
 

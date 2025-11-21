@@ -1,12 +1,13 @@
+import logging
+
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from django.db.models import OuterRef, Subquery
-from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, status, views, viewsets
+from rest_framework import generics, mixins, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -25,6 +26,9 @@ from apps.device.serializers import (
     TripListSerializer,
     UpdateSpaceDeviceSerializer,
 )
+from apps.device.services.trip_analyzer import TripAnalyzerService
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
@@ -81,7 +85,7 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     def get_queryset(self):
         space = self._get_space()
         include_latest_checkpoint = (
-            str(self.request.query_params.get("include_latest_checkpoint", "")).lower()
+            str(self.request.GET.get("include_latest_checkpoint", "")).lower()
             == "true"
         )
         queryset = SpaceDevice.objects.filter(space=space).select_related("device")
@@ -175,7 +179,9 @@ class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DeviceTransformedDataSerializer
 
 
-class TripViewSet(viewsets.ModelViewSet):
+class TripViewSet(mixins.RetrieveModelMixin,
+                  mixins.ListModelMixin,
+                  viewsets.GenericViewSet):
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
@@ -193,126 +199,40 @@ class TripViewSet(viewsets.ModelViewSet):
         }
 
         queryset = Trip.objects.filter(**filters).select_related("space_device__space")
+
         if self._should_include_checkpoints():
             queryset = queryset.select_related(
                 "space_device",
                 "space_device__device",
                 "space_device__device__lorawan_device",
             )
+
         return queryset
 
     def get_serializer_class(self):
         return (
             TripDetailSerializer
-            if self.action in ["retrieve", "list"]
+            if self.action == "retrieve"
             else TripListSerializer
         )
 
     def _should_include_checkpoints(self):
-        include_checkpoints = getattr(self.request, "query_params", {}).get(
-            "include_checkpoints"
-        )
-        return include_checkpoints is not None and include_checkpoints.lower() == "true"
+        return self.action == "retrieve"
 
-    def _extract_trip_metadata(self, trip):
-        return {
-            "trip": trip,
-            "dev_eui": trip.space_device.device.lorawan_device.dev_eui,
-            "start": trip.started_at,
-            "end": trip.ended_at or timezone.now(),
-        }
-
-    def _get_transformed_data_queryset(self, dev_euis, min_start, max_end):
-        return (
-            DeviceTransformedData.objects.only(
-                "id",
-                "timestamp",
-                "data",
-                "source",
-                "metadata",
-                "device_reference",
-                "device_eui",
-            )
-            .filter(
-                device_eui__in=dev_euis,
-                timestamp__gte=min_start,
-                timestamp__lte=max_end,
-            )
-            .order_by("device_eui", "timestamp")
-        )
-
-    def _filter_transformed_data_by_time(self, transformed_data, start_time, end_time):
-        return [
-            data_record
-            for data_record in transformed_data
-            if start_time <= data_record.timestamp <= end_time
-        ]
-
-    def _attach_data_to_trip(self, trip, transformed_data):
-        setattr(trip, "checkpoints", transformed_data)
-
-    def _attach_transformed_data(self, trips):
-        if not trips:
-            return
-
-        is_single_trip = not isinstance(trips, (list, tuple))
-        trip_list = [trips] if is_single_trip else trips
-
-        trip_metadata = [self._extract_trip_metadata(trip) for trip in trip_list]
-
-        if not trip_metadata:
-            return
-
-        dev_euis = list({meta["dev_eui"] for meta in trip_metadata})
-        min_start = min(meta["start"] for meta in trip_metadata)
-        max_end = max(meta["end"] for meta in trip_metadata)
-
-        all_transformed_data = list(
-            self._get_transformed_data_queryset(dev_euis, min_start, max_end)
-        )
-
-        # Group data by device EUI for efficient lookup
-        data_by_eui = {}
-        for data in all_transformed_data:
-            data_by_eui.setdefault(data.device_eui, []).append(data)
-
-        # Filter and attach data to each trip
-        for meta in trip_metadata:
-            eui_data = data_by_eui.get(meta["dev_eui"], [])
-            filtered_data = self._filter_transformed_data_by_time(
-                eui_data, meta["start"], meta["end"]
-            )
-            self._attach_data_to_trip(meta["trip"], filtered_data)
-
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                "include_checkpoints",
-                openapi.IN_QUERY,
-                description="Include DeviceCheckpoints in response (true/false)",
-                type=openapi.TYPE_BOOLEAN,
-                default=False,
-            )
-        ]
-    )
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if self._should_include_checkpoints():
-            self._attach_transformed_data(instance)
+        trip_analyzer = TripAnalyzerService()
+        trip_with_locations = trip_analyzer.get_trip_with_locations(
+            trip=instance,
+            organization_slug=instance.space_device.space.slug_name,
+        )
 
-        serializer = self.get_serializer(instance)
+        serializer = self.get_serializer(trip_with_locations)
         return Response(serializer.data)
 
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter(
-                "include_checkpoints",
-                openapi.IN_QUERY,
-                description="Include DeviceCheckpoints in response (true/false)",
-                type=openapi.TYPE_BOOLEAN,
-                default=False,
-            ),
             openapi.Parameter(
                 "space_device__device_id",
                 openapi.IN_QUERY,
@@ -322,22 +242,35 @@ class TripViewSet(viewsets.ModelViewSet):
         ]
     )
     def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
+        # Always analyze the current trip when listing
+        device_id = request.query_params.get("space_device__device_id")
 
+        if not device_id:
+            raise ParseError("Device ID (space_device__device_id) query parameter is required.")
+
+        trip_analyzer = TripAnalyzerService()
+        space_device = SpaceDevice.objects.select_related(
+            "device", "space"
+        ).get(device__id=device_id)
+        current_trip = Trip.objects.filter(
+            space_device=space_device,
+            is_finished=False
+        ).order_by('-started_at').first()
+
+        trip_analyzer.analyze_and_update_current_trip(space_device, current_trip)
+
+        # Get the trips (including any newly created ones)
+        queryset = self.filter_queryset(self.get_queryset())
+        logger.info(f"Found {queryset.count()} trips in queryset")
+
+        # List never includes checkpoints
         page = self.paginate_queryset(queryset)
         if page is not None:
-            if self._should_include_checkpoints():
-                self._attach_transformed_data(page)
-
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            response = self.get_paginated_response(serializer.data)
+            return response
 
-        if self._should_include_checkpoints():
-            trips = list(queryset)
-            self._attach_transformed_data(trips)
-            serializer = self.get_serializer(trips, many=True)
-        else:
-            serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(queryset, many=True)
 
         return Response(serializer.data)
 
