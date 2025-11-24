@@ -51,7 +51,7 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Device
-        fields = ["id", "device_profile", "device_id", "space_slug"]
+        fields = ["id", "device_profile", "device_id", "space_slug", "is_published"]
 
 
 class DeviceSerializer(serializers.ModelSerializer):
