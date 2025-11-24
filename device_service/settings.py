@@ -167,5 +167,40 @@ CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"
 
 # EMQX
 EMQX_HOST = os.getenv("EMQX_HOST", "http://emqx:18083/api/v5")
+
+# Telemetry Service Configuration
+TELEMETRY_SERVICE_URL = os.getenv("TELEMETRY_SERVICE_URL", "http://telemetry:8080")
+
+# Trip Detection Configuration
+TRIP_STOP_DISTANCE_METERS = int(os.getenv("TRIP_STOP_DISTANCE_METERS", "50"))
+TRIP_STOP_TIME_MINUTES = int(os.getenv("TRIP_STOP_TIME_MINUTES", "5"))
+TRIP_MOVE_DISTANCE_METERS = int(os.getenv("TRIP_MOVE_DISTANCE_METERS", "100"))
 USERNAME = os.getenv("USERNAME", "admin")
 PASSWORD = os.getenv("PASSWORD", "public")
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
