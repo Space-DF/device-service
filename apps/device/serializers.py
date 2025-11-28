@@ -5,7 +5,6 @@ from common.utils.custom_fields import HexCharField
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.utils.clients.telemetry_client import TelemetryServiceClient
 from apps.device.models import (
     Device,
     DeviceTransformedData,
@@ -15,12 +14,14 @@ from apps.device.models import (
 )
 from apps.device_model.serializers import DeviceModelSerializer
 from apps.network_server.serializers import NetworkServerSerializer
+from apps.utils.clients.telemetry_client import TelemetryServiceClient
 
 logger = logging.getLogger(__name__)
 
 
 class Checkpoint(TypedDict):
     """A checkpoint with timestamp and coordinates"""
+
     timestamp: str
     latitude: float
     longitude: float
@@ -124,6 +125,7 @@ class GetDeviceSerializer(DeviceSerializer):
 
 class LatestCheckpointSerializer(serializers.Serializer):
     """Serializer for the latest checkpoint of a device"""
+
     timestamp = serializers.DateTimeField(help_text="Timestamp of the checkpoint")
     latitude = serializers.FloatField(help_text="Latitude coordinate")
     longitude = serializers.FloatField(help_text="Longitude coordinate")
@@ -141,19 +143,18 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
     def to_representation(self, instance: SpaceDevice):
         """Override to fetch latest_checkpoint from telemetry service"""
         data = super().to_representation(instance)
-        data['latest_checkpoint'] = self._get_latest_checkpoint(instance)
+        data["latest_checkpoint"] = self._get_latest_checkpoint(instance)
         return data
 
     def _get_latest_checkpoint(self, obj: SpaceDevice) -> Optional[Checkpoint]:
         """Fetch the latest checkpoint from telemetry service"""
         try:
-            organization_slug = obj.space.slug_name
+            space_slug = obj.space.slug_name
             device_id = str(obj.device.id)
 
             telemetry_client = TelemetryServiceClient()
             location = telemetry_client.get_last_location(
-                device_id=device_id,
-                organization_slug=organization_slug
+                device_id=device_id, space_slug=space_slug
             )
 
             if location:
@@ -161,11 +162,13 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
                     timestamp=str(location.timestamp),
                     latitude=location.latitude,
                     longitude=location.longitude,
-                    accuracy=location.accuracy
+                    accuracy=location.accuracy,
                 )
             return None
         except Exception as e:
-            logger.error(f"Error fetching latest checkpoint for device {obj.device.id}: {e}")
+            logger.error(
+                f"Error fetching latest checkpoint for device {obj.device.id}: {e}"
+            )
             return None
 
 
@@ -191,6 +194,7 @@ class DeviceTransformedDataSerializer(serializers.ModelSerializer):
 
 class CheckpointSerializer(serializers.Serializer):
     """Serializer for location checkpoints from telemetry service"""
+
     timestamp = serializers.DateTimeField()
     longitude = serializers.FloatField()
     latitude = serializers.FloatField()
@@ -219,7 +223,9 @@ class TripListSerializer(serializers.ModelSerializer):
 
 class TripDetailSerializer(TripListSerializer):
     checkpoints = CheckpointSerializer(
-        many=True, read_only=True, allow_null=True,
+        many=True,
+        read_only=True,
+        allow_null=True,
     )
 
     class Meta(TripListSerializer.Meta):
@@ -228,12 +234,10 @@ class TripDetailSerializer(TripListSerializer):
 
 class TripAnalysisSerializer(serializers.Serializer):
     """Serializer for trip analysis results with telemetry data"""
+
     id = serializers.UUIDField(read_only=True)
     space_device_id = serializers.UUIDField(read_only=True)
     started_at = serializers.DateTimeField(read_only=True)
     is_finished = serializers.BooleanField(read_only=True)
-    locations = serializers.ListField(
-        child=serializers.DictField(),
-        read_only=True
-    )
+    locations = serializers.ListField(child=serializers.DictField(), read_only=True)
     location_count = serializers.IntegerField(read_only=True)

@@ -80,4 +80,6 @@ class Trip(models.Model):
     is_finished = models.BooleanField(default=False, db_index=True)
     last_latitude = models.FloatField(null=True, blank=True)
     last_longitude = models.FloatField(null=True, blank=True)
-    last_report = models.DateTimeField(null=True, blank=True, db_index=True)  # Last data point timestamp
+    last_report = models.DateTimeField(
+        null=True, blank=True, db_index=True
+    )  # Last data point timestamp
