@@ -83,8 +83,7 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     def get_queryset(self):
         space = self._get_space()
         include_latest_checkpoint = (
-            str(self.request.GET.get("include_latest_checkpoint", "")).lower()
-            == "true"
+            str(self.request.GET.get("include_latest_checkpoint", "")).lower() == "true"
         )
         queryset = SpaceDevice.objects.filter(space=space).select_related("device")
         if include_latest_checkpoint:
@@ -177,9 +176,9 @@ class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DeviceTransformedDataSerializer
 
 
-class TripViewSet(mixins.RetrieveModelMixin,
-                  mixins.ListModelMixin,
-                  viewsets.GenericViewSet):
+class TripViewSet(
+    mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
+):
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
@@ -198,7 +197,7 @@ class TripViewSet(mixins.RetrieveModelMixin,
 
         queryset = Trip.objects.filter(**filters).select_related("space_device__space")
 
-        if self._should_include_checkpoints():
+        if self.action == "retrieve":
             queryset = queryset.select_related(
                 "space_device",
                 "space_device__device",
@@ -208,14 +207,7 @@ class TripViewSet(mixins.RetrieveModelMixin,
         return queryset
 
     def get_serializer_class(self):
-        return (
-            TripDetailSerializer
-            if self.action == "retrieve"
-            else TripListSerializer
-        )
-
-    def _should_include_checkpoints(self):
-        return self.action == "retrieve"
+        return TripDetailSerializer if self.action == "retrieve" else TripListSerializer
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -223,7 +215,7 @@ class TripViewSet(mixins.RetrieveModelMixin,
         trip_analyzer = TripAnalyzerService()
         trip_with_locations = trip_analyzer.get_trip_with_locations(
             trip=instance,
-            organization_slug=instance.space_device.space.slug_name,
+            space_slug=instance.space_device.space.slug_name,
         )
 
         serializer = self.get_serializer(trip_with_locations)
@@ -244,16 +236,19 @@ class TripViewSet(mixins.RetrieveModelMixin,
         device_id = request.query_params.get("space_device__device_id")
 
         if not device_id:
-            raise ParseError("Device ID (space_device__device_id) query parameter is required.")
+            raise ParseError(
+                "Device ID (space_device__device_id) query parameter is required."
+            )
 
         trip_analyzer = TripAnalyzerService()
-        space_device = SpaceDevice.objects.select_related(
-            "device", "space"
-        ).get(device__id=device_id)
-        current_trip = Trip.objects.filter(
-            space_device=space_device,
-            is_finished=False
-        ).order_by('-started_at').first()
+        space_device = SpaceDevice.objects.select_related("device", "space").get(
+            device__id=device_id
+        )
+        current_trip = (
+            Trip.objects.filter(space_device=space_device, is_finished=False)
+            .order_by("-started_at")
+            .first()
+        )
 
         trip_analyzer.analyze_and_update_current_trip(space_device, current_trip)
 

@@ -2,12 +2,13 @@
 Telemetry Service Client for fetching location history data
 """
 import logging
+from dataclasses import dataclass
 from datetime import datetime
+
 import requests
 from django.conf import settings
-from requests.exceptions import RequestException, Timeout
-from dataclasses import dataclass
 from django.utils import timezone
+from requests.exceptions import RequestException, Timeout
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def _parse_timestamp(timestamp: str) -> datetime:
     if isinstance(timestamp, str):
         # Try ISO format first
         try:
-            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             if dt.tzinfo is None:
                 dt = timezone.make_aware(dt)
             return dt
@@ -36,11 +37,7 @@ def _parse_timestamp(timestamp: str) -> datetime:
             pass
 
         # Try other common formats
-        formats = [
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%dT%H:%M:%S',
-            '%Y-%m-%d %H:%M:%S.%f'
-        ]
+        formats = ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"]
         for fmt in formats:
             try:
                 dt = datetime.strptime(timestamp, fmt)
@@ -54,6 +51,7 @@ def _parse_timestamp(timestamp: str) -> datetime:
 @dataclass
 class LocationPoint:
     """Data class for a single location point"""
+
     timestamp: datetime
     latitude: float
     longitude: float
@@ -71,23 +69,25 @@ class TelemetryServiceClient:
         Args:
             base_url: Base URL for the telemetry service. If not provided, uses settings
         """
-        self.base_url = base_url or getattr(settings, 'TELEMETRY_SERVICE_URL', 'http://telemetry:8080')
+        self.base_url = base_url or getattr(
+            settings, "TELEMETRY_SERVICE_URL", "http://telemetry:8080"
+        )
         self.timeout = 30  # seconds
 
     def get_location_history(
         self,
         device_id: str,
-        organization_slug: str,
+        space_slug: str,
         start: datetime,
         end: datetime | None = None,
-        limit: int = 10000
+        limit: int = 10000,
     ) -> list[LocationPoint]:
         """
         Fetch location history for a device from the telemetry service
 
         Args:
             device_id: The device ID to fetch data for
-            organization_slug: The organization slug
+            space_slug: The organization slug
             start: Start timestamp (optional)
             end: End timestamp (optional)
             limit: Maximum number of records to fetch
@@ -100,21 +100,18 @@ class TelemetryServiceClient:
         """
         endpoint = f"{self.base_url}/telemetry/v1/location/history"
 
-        params = {
-            'device_id': device_id,
-            'organization_slug': organization_slug,
-            'limit': limit
-        }
+        params = {"device_id": device_id, "space_slug": space_slug, "limit": limit}
 
         if start:
-            params['start'] = start.isoformat() if isinstance(start, datetime) else start
+            params["start"] = (
+                start.isoformat() if isinstance(start, datetime) else start
+            )
 
         if end:
-            params['end'] = end.isoformat() if isinstance(end, datetime) else end
+            params["end"] = end.isoformat() if isinstance(end, datetime) else end
 
         try:
             logger.info("Device ID: %s", device_id)
-            logger.info(f"Organization: {organization_slug}")
             logger.info(f"Start: {start}")
             logger.info(f"End: {end}")
             logger.info(f"Limit: {limit}")
@@ -126,9 +123,9 @@ class TelemetryServiceClient:
                 params=params,
                 timeout=self.timeout,
                 headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
             )
 
             logger.info(f"Response status code: {response.status_code}")
@@ -140,39 +137,43 @@ class TelemetryServiceClient:
             response.raise_for_status()
 
             data = response.json()
-            locations = data.get('locations', [])
+            locations = data.get("locations", [])
             logger.info(f"Received {len(locations)} locations")
 
             formatted_locations: list[LocationPoint] = []
             for loc in locations:
-                formatted_locations.append(LocationPoint(
-                    timestamp=_parse_timestamp(loc.get('timestamp', '')),
-                    latitude=loc.get('latitude', 0),
-                    longitude=loc.get('longitude', 0),
-                    accuracy=loc.get('accuracy', 0),
-                    device_id=device_id,
-                ))
+                formatted_locations.append(
+                    LocationPoint(
+                        timestamp=_parse_timestamp(loc.get("timestamp", "")),
+                        latitude=loc.get("latitude", 0),
+                        longitude=loc.get("longitude", 0),
+                        accuracy=loc.get("accuracy", 0),
+                        device_id=device_id,
+                    )
+                )
 
             return formatted_locations
         except Timeout:
-            logger.error(f"Timeout while fetching location history for device {device_id}")
+            logger.error(
+                f"Timeout while fetching location history for device {device_id}"
+            )
             raise
 
         except RequestException as e:
-            logger.error(f"Error fetching location history for device {device_id}: {str(e)}")
+            logger.error(
+                f"Error fetching location history for device {device_id}: {str(e)}"
+            )
             raise
 
     def get_last_location(
-        self,
-        device_id: str,
-        organization_slug: str
+        self, device_id: str, space_slug: str
     ) -> LocationPoint | None:
         """
         Fetch the most recent location for a device from the telemetry service
 
         Args:
             device_id: The device ID to fetch data for
-            organization_slug: The organization slug
+            space_slug: The organization slug
 
         Returns:
             The most recent location point, or None if not found
@@ -180,21 +181,21 @@ class TelemetryServiceClient:
         endpoint = f"{self.base_url}/telemetry/v1/location/last"
 
         params = {
-            'device_id': device_id,
-            'organization_slug': organization_slug,
+            "device_id": device_id,
+            "space_slug": space_slug,
         }
 
         try:
-            logger.info("Device ID: %s, Organization: %s", device_id, organization_slug)
+            logger.info("Device ID: %s, Organization: %s", device_id, space_slug)
 
             response = requests.get(
                 endpoint,
                 params=params,
                 timeout=self.timeout,
                 headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
             )
 
             logger.info(f"Response status code: {response.status_code}")
@@ -209,15 +210,15 @@ class TelemetryServiceClient:
             logger.info(f"Response: {data}")
 
             # Check for error response
-            if 'error' in data:
+            if "error" in data:
                 logger.warning(f"Error from telemetry service: {data['error']}")
                 return None
 
             location_point = LocationPoint(
-                timestamp=_parse_timestamp(data.get('timestamp', '')),
-                latitude=data.get('latitude', 0),
-                longitude=data.get('longitude', 0),
-                accuracy=data.get('accuracy', 0),
+                timestamp=_parse_timestamp(data.get("timestamp", "")),
+                latitude=data.get("latitude", 0),
+                longitude=data.get("longitude", 0),
+                accuracy=data.get("accuracy", 0),
                 device_id=device_id,
             )
 
@@ -228,7 +229,9 @@ class TelemetryServiceClient:
             return None
 
         except RequestException as e:
-            logger.error(f"Error fetching last location for device {device_id}: {str(e)}")
+            logger.error(
+                f"Error fetching last location for device {device_id}: {str(e)}"
+            )
             return None
 
     def check_health(self) -> bool:
