@@ -120,9 +120,9 @@ class DeviceSerializer(serializers.ModelSerializer):
             try:
                 get_redis_connection("default").delete(cache_key)
                 logger.debug("Deleted device cache key successfully")
-            except Exception as exc:
+            except Exception:
                 logger.warning("Failed to delete cache key")
-        
+
         return instance
 
 
