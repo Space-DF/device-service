@@ -3,6 +3,7 @@ from typing import Optional, TypedDict
 
 from common.utils.custom_fields import HexCharField
 from django.db import transaction
+from django_redis import get_redis_connection
 from rest_framework import serializers
 
 from apps.device.models import (
@@ -111,6 +112,17 @@ class DeviceSerializer(serializers.ModelSerializer):
             else:
                 LorawanDevice.objects.create(device=instance, **lorawan_data)
 
+        request = self.context.get("request")
+        org = request.headers.get("X-Organization")
+        dev_eui = getattr(getattr(instance, "lorawan_device", None), "dev_eui", None)
+        if org and dev_eui:
+            cache_key = f"{org}:lorawan:{dev_eui}"
+            try:
+                get_redis_connection("default").delete(cache_key)
+                logger.debug("Deleted device cache key successfully")
+            except Exception as exc:
+                logger.warning("Failed to delete cache key")
+        
         return instance
 
 
