@@ -2,8 +2,8 @@ import logging
 from typing import Optional, TypedDict
 
 from common.utils.custom_fields import HexCharField
+from django.core.cache import cache
 from django.db import transaction
-from django_redis import get_redis_connection
 from rest_framework import serializers
 
 from apps.device.models import (
@@ -118,7 +118,7 @@ class DeviceSerializer(serializers.ModelSerializer):
         if org and dev_eui:
             cache_key = f"{org}:lorawan:{dev_eui}"
             try:
-                get_redis_connection("default").delete(cache_key)
+                cache.delete(cache_key)
                 logger.debug("Deleted device cache key successfully")
             except Exception:
                 logger.warning("Failed to delete cache key")
