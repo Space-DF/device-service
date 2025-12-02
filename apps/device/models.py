@@ -75,7 +75,7 @@ class DeviceTransformedData(models.Model):
 
 class Trip(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    space_device = models.ForeignKey(SpaceDevice, on_delete=models.PROTECT)
+    space_device = models.ForeignKey(SpaceDevice, on_delete=models.CASCADE)
     started_at = models.DateTimeField(db_index=True)
     is_finished = models.BooleanField(default=False, db_index=True)
     last_latitude = models.FloatField(null=True, blank=True)
