@@ -171,6 +171,17 @@ EMQX_HOST = os.getenv("EMQX_HOST", "http://emqx:18083/api/v5")
 # Telemetry Service Configuration
 TELEMETRY_SERVICE_URL = os.getenv("TELEMETRY_SERVICE_URL", "http://telemetry:8080")
 
+# Redis cache
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("REDIS_HOST", "redis://redis:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
 # Trip Detection Configuration
 TRIP_STOP_DISTANCE_METERS = int(os.getenv("TRIP_STOP_DISTANCE_METERS", "50"))
 TRIP_STOP_TIME_MINUTES = int(os.getenv("TRIP_STOP_TIME_MINUTES", "5"))
