@@ -241,9 +241,13 @@ class TripViewSet(
             )
 
         trip_analyzer = TripAnalyzerService()
-        space_device = SpaceDevice.objects.select_related("device", "space").get(
-            device__id=device_id
-        )
+        try:
+            space_device = SpaceDevice.objects.select_related("device", "space").get(
+                device__id=device_id
+            )
+        except SpaceDevice.DoesNotExist:
+            raise ParseError("Device does not exist or is not linked to any space.")
+
         current_trip = (
             Trip.objects.filter(space_device=space_device, is_finished=False)
             .order_by("-started_at")
