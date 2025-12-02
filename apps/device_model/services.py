@@ -3,7 +3,7 @@ from apps.device_model.models import DeviceModel
 default_device_models = [
     {
         "name": "lorawan",
-        "device_type": "RAKSticker",
+        "device_type": "RAK2270",
     },
     {
         "name": "lorawan",
