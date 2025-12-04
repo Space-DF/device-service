@@ -277,7 +277,7 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
     lookup_field = "lorawan_device__dev_eui"
     lookup_url_kwarg = "dev_eui"
     queryset = Device.objects.select_related(
-        "device_model", "lorawan_device"
+        "device_model", "device_model__manufacture", "lorawan_device"
     ).prefetch_related("space_devices")
 
     def get_queryset(self):

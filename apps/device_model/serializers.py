@@ -11,6 +11,8 @@ class DeviceManufactureSerializer(serializers.ModelSerializer):
 
 
 class DeviceModelSerializer(serializers.ModelSerializer):
+    manufacture = serializers.CharField(source="manufacture.name", read_only=True)
+
     class Meta:
         model = DeviceModel
         fields = "__all__"
