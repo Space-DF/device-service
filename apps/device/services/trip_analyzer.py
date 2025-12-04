@@ -7,12 +7,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 from typing import List, Tuple
-from uuid import uuid4
 
 import pytz
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from apps.device.models import SpaceDevice, Trip
 from apps.utils.clients.telemetry_client import LocationPoint, TelemetryServiceClient
@@ -22,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TripWithLocations:
-    """Data class for trip with location points"""
-
     id: str
     space_device_id: str
     started_at: str
@@ -34,13 +30,13 @@ class TripWithLocations:
 
 class TripAnalyzerService:
     """
-    Service for analyzing device location data and detecting trips
+    Trip rules (according to new requirement):
 
-    Trip detection rules:
-    - A new trip is created when movement is detected after a stop
-    - A trip ends when device stops for >= STOP_TIME_THRESHOLD and then moves again
-    - Stops are detected when distance < STOP_DISTANCE_THRESHOLD
-    - Movement is detected when distance > MOVE_DISTANCE_THRESHOLD
+    - Trip = the time period the device MOVES continuously.
+    - If the device is stationary (distance between points < STOP_DISTANCE)
+    for at least STOP_TIME_MINUTES, then moves >= MOVE_DISTANCE
+    then cut the trip: end the old trip, create a new trip.
+    - Lost connection / out of battery / offline does not automatically create a new trip.
     """
 
     def __init__(self):
@@ -62,168 +58,233 @@ class TripAnalyzerService:
         self, space_device: SpaceDevice, current_trip: Trip | None = None
     ):
         device_id = str(space_device.device.id)
+        space_slug = space_device.space.slug_name
+
+        logger.info(
+            "Analyze trips for device=%s, space=%s, current_trip=%s",
+            device_id,
+            space_slug,
+            current_trip.id if current_trip else None,
+        )
+
+        # Make sure to have current_trip if there is a historical location
+        current_trip = self._ensure_current_trip(space_device, current_trip)
         if not current_trip:
             logger.info(
-                "No current unfinished trip found for device %s will create new one",
+                "No trip and no location history for device=%s, skip analysis",
                 device_id,
             )
-            space_slug = space_device.space.slug_name
-            earliest_start = datetime(2020, 1, 1, tzinfo=pytz.UTC)
-            locations = self.telemetry_client.get_location_history(
-                device_id, space_slug, earliest_start
-            )
-            logger.info(
-                f"Telemetry response: \
-                {len(locations) if locations else 0} locations found"
-            )
-            logger.info(f"Locations: {locations}")
-            if locations and len(locations) > 0:
-                first_location = locations[0]
-                logger.info(
-                    "Creating trip: started_at=%s, lat=%s, lng=%s",
-                    first_location.timestamp,
-                    first_location.latitude,
-                    first_location.longitude,
-                )
-                current_trip = Trip.objects.create(
-                    space_device=space_device,
-                    started_at=first_location.timestamp,
-                    is_finished=False,
-                    last_latitude=first_location.latitude,
-                    last_longitude=first_location.longitude,
-                    last_report=first_location.timestamp,
-                )
-                logger.info(
-                    "Created trip with ID=%s using first location timestamp: %s",
-                    current_trip.id,
-                    current_trip.started_at,
-                )
-            else:
-                # No location data exists yet, create trip with current time
-                now = timezone.now()
-                logger.info(
-                    f"No location history found, creating trip with current time: {now}"
-                )
-                current_trip = Trip.objects.create(
-                    space_device=space_device, started_at=now, is_finished=False
-                )
-                logger.info(
-                    f"Created trip with ID={current_trip.id} using current time"
-                )
+            return
 
+        # Get locations newer than last_report
         if not current_trip.last_report:
-            logger.info(
-                "Trip %s has no last_report, setting to started_at=%s",
-                current_trip.id,
-                current_trip.started_at,
-            )
-            # Trip exists but no last report yet, set it to trip start time
             current_trip.last_report = current_trip.started_at
             current_trip.save(update_fields=["last_report"])
-            logger.info(
-                f"Updated trip {current_trip.id} last_report to {current_trip.last_report}"
+
+        start_time = current_trip.last_report
+        logger.info("Fetching locations for device=%s since %s", device_id, start_time)
+
+        new_locations: list[LocationPoint] = self.telemetry_client.get_location_history(
+            device_id=device_id,
+            space_slug=space_slug,
+            start=start_time,
+            end=None,
+        )
+
+        if not new_locations:
+            logger.info("No new locations for device=%s, nothing to update", device_id)
+            return
+
+        new_locations.sort(key=lambda item: item.timestamp)
+
+        with transaction.atomic():
+            self._process_locations_for_trip(
+                space_device=space_device,
+                current_trip=current_trip,
+                new_locations=new_locations,
             )
 
-        # Fetch locations since last report
-        logger.info(
-            f"Fetching new locations since last_report={current_trip.last_report}"
-        )
-        new_locations = self.telemetry_client.get_location_history(
-            device_id=str(space_device.device.id),
-            space_slug=space_device.space.slug_name,
-            start=current_trip.last_report,
-            end=None,  # Get all locations up to now
-        )
-        if not new_locations:
-            logger.info("No new locations found, skipping analysis")
-            return
+    def _process_locations_for_trip(
+        self,
+        space_device: SpaceDevice,
+        current_trip: Trip,
+        new_locations: list[LocationPoint],
+    ):
+        """
+        Simple device state:
+
+        - prev_time / prev_coords: previous point processed.
+        - stop_start_time / stop_ref_coords: start time and position of "stand still" sequence.
+        - in_long_stop = True when stand still >= stop_time_minutes.
+        - Only when in_long_stop=True and moved_from_stop >= move_distance
+        will cut trip and create new trip.
+        """
+        prev_time = current_trip.last_report or current_trip.started_at
+        prev_coords: Tuple[float, float] | None = None
+
+        if (
+            current_trip.last_latitude is not None
+            and current_trip.last_longitude is not None
+        ):
+            prev_coords = (current_trip.last_latitude, current_trip.last_longitude)
+
+        stop_start_time: datetime | None = None
+        stop_ref_coords: Tuple[float, float] | None = None
+        in_long_stop = False
+
         new_trips: list[Trip] = []
-        save_current_trip_func = None
-        for i, location in enumerate(new_locations):
-            if current_trip.last_report >= location.timestamp:
+
+        for loc in new_locations:
+            if prev_time and loc.timestamp <= prev_time:
                 continue
-            coords = (location.latitude, location.longitude)
-            if not current_trip.last_latitude or not current_trip.last_longitude:
-                current_trip.last_latitude, current_trip.last_longitude = coords
-                current_trip.last_report = location.timestamp
 
-            last_coords = (current_trip.last_latitude, current_trip.last_longitude)
-            time_diff = (
-                location.timestamp - current_trip.last_report
-            ).total_seconds() / 60
+            coords = (loc.latitude, loc.longitude)
+            if prev_coords is None:
+                prev_coords = coords
+                prev_time = loc.timestamp
+                current_trip.last_latitude = loc.latitude
+                current_trip.last_longitude = loc.longitude
+                current_trip.last_report = loc.timestamp
+                continue
 
-            distance = self._calculate_distance(last_coords, coords)
-            is_stopped = distance < self.stop_distance_meters
+            distance = self._calculate_distance(prev_coords, coords)
+            time_diff_min = (loc.timestamp - prev_time).total_seconds() / 60.0
 
-            if is_stopped and time_diff >= self.stop_time_minutes:
+            logger.info(
+                "Device %s step: dt=%.2fmin, d=%.2fm, prev=%s, curr=%s",
+                space_device.device_id,
+                time_diff_min,
+                distance,
+                prev_coords,
+                coords,
+            )
+
+            # Device is stationary
+            if distance <= self.stop_distance_meters:
+                if stop_start_time is None:
+                    stop_start_time = prev_time
+                    stop_ref_coords = prev_coords
+
+                stop_duration_min = (
+                    loc.timestamp - stop_start_time
+                ).total_seconds() / 60.0
+
+                if stop_duration_min >= self.stop_time_minutes:
+                    in_long_stop = True
+
+                current_trip.last_latitude = loc.latitude
+                current_trip.last_longitude = loc.longitude
+                current_trip.last_report = loc.timestamp
+
+                prev_coords = coords
+                prev_time = loc.timestamp
+                continue
+
+            # Device is moving
+            if in_long_stop and stop_ref_coords is not None:
+                moved_from_stop = self._calculate_distance(stop_ref_coords, coords)
                 logger.info(
-                    "Device stopped for %.2f minutes (threshold: %d), checking for next movement",
-                    time_diff,
-                    self.stop_time_minutes,
+                    "Device %s moved_from_stop=%.2fm (threshold=%sm)",
+                    space_device.device_id,
+                    moved_from_stop,
+                    self.move_distance_meters,
                 )
-                next_loc = new_locations[i + 1] if i + 1 < len(new_locations) else None
-                if not next_loc:
-                    logger.info(
-                        "No next location to check for movement, ending analysis"
-                    )
-                    break
 
-                next_coords = (next_loc.latitude, next_loc.longitude)
-                next_distance = self._calculate_distance(coords, next_coords)
-                if next_distance < self.move_distance_meters:
-                    logger.info(
-                        "Next location distance %.2fm is below move threshold %.2fm, continuing stop",
-                        next_distance,
-                        self.move_distance_meters,
+                if moved_from_stop >= self.move_distance_meters:
+                    current_trip.is_finished = True
+                    new_trip = Trip(
+                        space_device=space_device,
+                        started_at=loc.timestamp,
+                        is_finished=False,
+                        last_latitude=loc.latitude,
+                        last_longitude=loc.longitude,
+                        last_report=loc.timestamp,
                     )
-                    current_trip.last_report = next_loc.timestamp
-                    current_trip.last_latitude = next_loc.latitude
-                    current_trip.last_longitude = next_loc.longitude
+                    new_trips.append(new_trip)
+                    current_trip = new_trip
+
+                    # Reset stop state
+                    stop_start_time = None
+                    stop_ref_coords = None
+                    in_long_stop = False
+
+                    prev_coords = (loc.latitude, loc.longitude)
+                    prev_time = loc.timestamp
                     continue
-                logger.info(
-                    "Device moved again, ending trip started at %s",
-                    current_trip.started_at,
-                )
-                current_trip.is_finished = True
-                new_trip = Trip(
-                    space_device=space_device,
-                    started_at=next_loc.timestamp,
-                    is_finished=False,
-                    last_latitude=next_coords[0],
-                    last_longitude=next_coords[1],
-                    last_report=next_loc.timestamp,
-                )
-                new_trips.append(new_trip)
-                if (
-                    current_trip.id
-                ):  # already in DB if not then it's already in new_trips
-                    save_current_trip_func = current_trip.save
-                current_trip = new_trip
-            else:
-                # Update current trip last location and report time
-                logger.info(
-                    "Updating current trip %s last location to lat=%s, lng=%s at %s",
-                    current_trip.id,
-                    location.latitude,
-                    location.longitude,
-                    location.timestamp,
-                )
-                current_trip.last_latitude = location.latitude
-                current_trip.last_longitude = location.longitude
-                current_trip.last_report = location.timestamp
-                current_trip.save(
-                    update_fields=["last_latitude", "last_longitude", "last_report"]
-                )
 
-        logger.info(f"Found {len(new_trips)} new trips, saving...")
-        with transaction.atomic():
-            if save_current_trip_func:
-                save_current_trip_func()
-            if new_trips:
-                for trip in new_trips:
-                    if not trip.id:
-                        trip.id = uuid4()
-                Trip.objects.bulk_create(new_trips)
+            current_trip.last_latitude = loc.latitude
+            current_trip.last_longitude = loc.longitude
+            current_trip.last_report = loc.timestamp
+
+            stop_start_time = None
+            stop_ref_coords = None
+            in_long_stop = False
+
+            prev_coords = coords
+            prev_time = loc.timestamp
+
+        if current_trip.pk:
+            current_trip.save(
+                update_fields=[
+                    "last_latitude",
+                    "last_longitude",
+                    "last_report",
+                    "is_finished",
+                ]
+            )
+        if new_trips:
+            unsaved_trips = [trip for trip in new_trips if not trip.pk]
+            if unsaved_trips:
+                Trip.objects.bulk_create(unsaved_trips)
+
+    def _ensure_current_trip(
+        self, space_device: SpaceDevice, current_trip: Trip | None
+    ) -> Trip | None:
+        """
+        - If there is a current_trip -> use it now.
+        - If there is no trip:
+            + If there is a historical location -> create the first trip from the first location.
+            + If there is no location -> return None (DO NOT create an empty trip).
+        """
+        if current_trip:
+            return current_trip
+
+        device_id = str(space_device.device.id)
+        space_slug = space_device.space.slug_name
+
+        earliest_start = datetime(2020, 1, 1, tzinfo=pytz.UTC)
+        locations = self.telemetry_client.get_location_history(
+            device_id=device_id,
+            space_slug=space_slug,
+            start=earliest_start,
+            end=None,
+        )
+
+        if not locations:
+            logger.info(
+                "No location history for device=%s, will not create empty trip",
+                device_id,
+            )
+            return None
+
+        first_trip = sorted(locations, key=lambda item: item.timestamp)[0]
+        logger.info(
+            "Creating first trip for device=%s at %s (lat=%s, lng=%s)",
+            device_id,
+            first_trip.timestamp,
+            first_trip.latitude,
+            first_trip.longitude,
+        )
+
+        trip = Trip.objects.create(
+            space_device=space_device,
+            started_at=first_trip.timestamp,
+            is_finished=False,
+            last_latitude=first_trip.latitude,
+            last_longitude=first_trip.longitude,
+            last_report=first_trip.timestamp,
+        )
+        return trip
 
     def _calculate_distance(
         self, coord1: Tuple[float, float], coord2: Tuple[float, float]
@@ -278,7 +339,7 @@ class TripAnalyzerService:
         )
 
         # Convert raw location dicts to LocationPoint objects
-        location_points = []
+        location_points: list[LocationPoint] = []
         for loc in raw_locations:
             location_points.append(
                 LocationPoint(
