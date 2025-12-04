@@ -55,7 +55,10 @@ class TripAnalyzerService:
         )
 
     def analyze_and_update_current_trip(
-        self, space_device: SpaceDevice, current_trip: Trip | None = None
+        self,
+        organization_slug: str,
+        space_device: SpaceDevice,
+        current_trip: Trip | None = None,
     ):
         device_id = str(space_device.device.id)
         space_slug = space_device.space.slug_name
@@ -68,7 +71,9 @@ class TripAnalyzerService:
         )
 
         # Make sure to have current_trip if there is a historical location
-        current_trip = self._ensure_current_trip(space_device, current_trip)
+        current_trip = self._ensure_current_trip(
+            organization_slug, space_device, current_trip
+        )
         if not current_trip:
             logger.info(
                 "No trip and no location history for device=%s, skip analysis",
@@ -86,6 +91,7 @@ class TripAnalyzerService:
 
         new_locations: list[LocationPoint] = self.telemetry_client.get_location_history(
             device_id=device_id,
+            organization_slug=organization_slug,
             space_slug=space_slug,
             start=start_time,
             end=None,
@@ -238,7 +244,10 @@ class TripAnalyzerService:
                 Trip.objects.bulk_create(unsaved_trips)
 
     def _ensure_current_trip(
-        self, space_device: SpaceDevice, current_trip: Trip | None
+        self,
+        organization_slug: str,
+        space_device: SpaceDevice,
+        current_trip: Trip | None,
     ) -> Trip | None:
         """
         - If there is a current_trip -> use it now.
@@ -255,6 +264,7 @@ class TripAnalyzerService:
         earliest_start = datetime(2020, 1, 1, tzinfo=pytz.UTC)
         locations = self.telemetry_client.get_location_history(
             device_id=device_id,
+            organization_slug=organization_slug,
             space_slug=space_slug,
             start=earliest_start,
             end=None,
@@ -316,7 +326,9 @@ class TripAnalyzerService:
 
         return R * c
 
-    def get_trip_with_locations(self, trip: Trip, space_slug: str) -> TripWithLocations:
+    def get_trip_with_locations(
+        self, trip: Trip, organization_slug: str, space_slug: str
+    ) -> TripWithLocations:
         """
         Get a trip with its associated location points from telemetry service
 
@@ -332,6 +344,7 @@ class TripAnalyzerService:
         # Fetch locations for the trip time range
         raw_locations = self.telemetry_client.get_location_history(
             device_id=device_id,
+            organization_slug=organization_slug,
             space_slug=space_slug,
             start=trip.started_at,
             end=trip.last_report if trip.is_finished else None,

@@ -164,7 +164,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
 
             telemetry_client = TelemetryServiceClient()
             location = telemetry_client.get_last_location(
-                device_id=device_id, space_slug=space_slug
+                device_id, self.request.tenant.slug_name, space_slug
             )
 
             if location:
