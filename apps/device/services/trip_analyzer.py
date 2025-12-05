@@ -4,7 +4,7 @@ Analyzes device location data to detect and manage trips based on movement patte
 """
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
 from typing import List, Tuple
 
@@ -86,7 +86,13 @@ class TripAnalyzerService:
             current_trip.last_report = current_trip.started_at
             current_trip.save(update_fields=["last_report"])
 
-        start_time = current_trip.last_report
+        analysis_start = current_trip.last_report
+        overlap_minutes = self.stop_time_minutes + 1
+        start_time = analysis_start - timedelta(minutes=overlap_minutes)
+
+        if start_time < current_trip.started_at:
+            start_time = current_trip.started_at
+
         logger.info("Fetching locations for device=%s since %s", device_id, start_time)
 
         new_locations: list[LocationPoint] = self.telemetry_client.get_location_history(
@@ -108,6 +114,7 @@ class TripAnalyzerService:
                 space_device=space_device,
                 current_trip=current_trip,
                 new_locations=new_locations,
+                analysis_start=analysis_start,
             )
 
     def _process_locations_for_trip(
@@ -115,6 +122,7 @@ class TripAnalyzerService:
         space_device: SpaceDevice,
         current_trip: Trip,
         new_locations: list[LocationPoint],
+        analysis_start: datetime,
     ):
         """
         Simple device state:
@@ -125,14 +133,8 @@ class TripAnalyzerService:
         - Only when in_long_stop=True and moved_from_stop >= move_distance
         will cut trip and create new trip.
         """
-        prev_time = current_trip.last_report or current_trip.started_at
+        prev_time: datetime | None = None
         prev_coords: Tuple[float, float] | None = None
-
-        if (
-            current_trip.last_latitude is not None
-            and current_trip.last_longitude is not None
-        ):
-            prev_coords = (current_trip.last_latitude, current_trip.last_longitude)
 
         stop_start_time: datetime | None = None
         stop_ref_coords: Tuple[float, float] | None = None
@@ -141,16 +143,18 @@ class TripAnalyzerService:
         new_trips: list[Trip] = []
 
         for loc in new_locations:
-            if prev_time and loc.timestamp <= prev_time:
-                continue
-
             coords = (loc.latitude, loc.longitude)
+            is_new = loc.timestamp > analysis_start
+
             if prev_coords is None:
                 prev_coords = coords
                 prev_time = loc.timestamp
-                current_trip.last_latitude = loc.latitude
-                current_trip.last_longitude = loc.longitude
-                current_trip.last_report = loc.timestamp
+
+                if is_new:
+                    current_trip.last_latitude = loc.latitude
+                    current_trip.last_longitude = loc.longitude
+                    current_trip.last_report = loc.timestamp
+
                 continue
 
             distance = self._calculate_distance(prev_coords, coords)
@@ -178,9 +182,10 @@ class TripAnalyzerService:
                 if stop_duration_min >= self.stop_time_minutes:
                     in_long_stop = True
 
-                current_trip.last_latitude = loc.latitude
-                current_trip.last_longitude = loc.longitude
-                current_trip.last_report = loc.timestamp
+                if is_new:
+                    current_trip.last_latitude = loc.latitude
+                    current_trip.last_longitude = loc.longitude
+                    current_trip.last_report = loc.timestamp
 
                 prev_coords = coords
                 prev_time = loc.timestamp
@@ -194,13 +199,19 @@ class TripAnalyzerService:
                     space_device.device_id,
                     moved_from_stop,
                     self.move_distance_meters,
+                    is_new,
                 )
 
-                if moved_from_stop >= self.move_distance_meters:
+                if is_new and moved_from_stop >= self.move_distance_meters:
                     current_trip.is_finished = True
+                    current_trip.last_report = prev_time
+
+                    if current_trip.pk:
+                        current_trip.save(update_fields=["is_finished", "last_report"])
+
                     new_trip = Trip(
                         space_device=space_device,
-                        started_at=loc.timestamp,
+                        started_at=prev_time,
                         is_finished=False,
                         last_latitude=loc.latitude,
                         last_longitude=loc.longitude,
@@ -218,9 +229,10 @@ class TripAnalyzerService:
                     prev_time = loc.timestamp
                     continue
 
-            current_trip.last_latitude = loc.latitude
-            current_trip.last_longitude = loc.longitude
-            current_trip.last_report = loc.timestamp
+            if is_new:
+                current_trip.last_latitude = loc.latitude
+                current_trip.last_longitude = loc.longitude
+                current_trip.last_report = loc.timestamp
 
             stop_start_time = None
             stop_ref_coords = None
