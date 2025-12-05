@@ -214,8 +214,9 @@ class TripViewSet(
 
         trip_analyzer = TripAnalyzerService()
         trip_with_locations = trip_analyzer.get_trip_with_locations(
-            trip=instance,
-            space_slug=instance.space_device.space.slug_name,
+            instance,
+            request.tenant.slug_name,
+            instance.space_device.space.slug_name,
         )
 
         serializer = self.get_serializer(trip_with_locations)
@@ -254,7 +255,9 @@ class TripViewSet(
             .first()
         )
 
-        trip_analyzer.analyze_and_update_current_trip(space_device, current_trip)
+        trip_analyzer.analyze_and_update_current_trip(
+            request.tenant.slug_name, space_device, current_trip
+        )
 
         # Get the trips (including any newly created ones)
         queryset = self.filter_queryset(self.get_queryset())

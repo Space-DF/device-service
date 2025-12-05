@@ -77,6 +77,7 @@ class TelemetryServiceClient:
     def get_location_history(
         self,
         device_id: str,
+        organization_slug: str,
         space_slug: str,
         start: datetime,
         end: datetime | None = None,
@@ -87,7 +88,7 @@ class TelemetryServiceClient:
 
         Args:
             device_id: The device ID to fetch data for
-            space_slug: The organization slug
+            space_slug: The space slug
             start: Start timestamp (optional)
             end: End timestamp (optional)
             limit: Maximum number of records to fetch
@@ -125,10 +126,13 @@ class TelemetryServiceClient:
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json",
+                    "X-Organization": organization_slug,
                 },
             )
 
-            logger.info(f"Response status code: {response.status_code}")
+            logger.info(
+                f"Response status code: {response.status_code}, {organization_slug}"
+            )
 
             if response.status_code == 404:
                 logger.warning(f"404 - No location data found for device {device_id}")
@@ -166,7 +170,7 @@ class TelemetryServiceClient:
             raise
 
     def get_last_location(
-        self, device_id: str, space_slug: str
+        self, device_id: str, organization_slug: str, space_slug: str
     ) -> LocationPoint | None:
         """
         Fetch the most recent location for a device from the telemetry service
@@ -186,8 +190,6 @@ class TelemetryServiceClient:
         }
 
         try:
-            logger.info("Device ID: %s, Organization: %s", device_id, space_slug)
-
             response = requests.get(
                 endpoint,
                 params=params,
@@ -195,6 +197,7 @@ class TelemetryServiceClient:
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json",
+                    "X-Organization": organization_slug,
                 },
             )
 
