@@ -113,8 +113,9 @@ class DeviceSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         org = request.headers.get("X-Organization")
         dev_eui = getattr(getattr(instance, "lorawan_device", None), "dev_eui", None)
+        cache_version = 1
         if org and dev_eui:
-            cache_key = f"{org}:lorawan:{dev_eui}"
+            cache_key = f":{cache_version}:{org}:lorawan:{dev_eui}"
             try:
                 cache.delete(cache_key)
                 logger.debug("Deleted device cache key successfully")
