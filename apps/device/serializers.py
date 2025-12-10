@@ -26,7 +26,6 @@ class Checkpoint(TypedDict):
     timestamp: str
     latitude: float
     longitude: float
-    accuracy: float
 
 
 class LorawanDeviceSerializer(serializers.ModelSerializer):
@@ -133,22 +132,12 @@ class GetDeviceSerializer(DeviceSerializer):
         fields = "__all__"
 
 
-class LatestCheckpointSerializer(serializers.Serializer):
-    """Serializer for the latest checkpoint of a device"""
-
-    timestamp = serializers.DateTimeField(help_text="Timestamp of the checkpoint")
-    latitude = serializers.FloatField(help_text="Latitude coordinate")
-    longitude = serializers.FloatField(help_text="Longitude coordinate")
-    accuracy = serializers.FloatField(help_text="Accuracy in meters")
-
-
 class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
-    latest_checkpoint = LatestCheckpointSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = SpaceDevice
-        fields = ["id", "name", "description", "device", "latest_checkpoint"]
+        fields = ["id", "name", "description", "device"]
 
     def to_representation(self, instance: SpaceDevice):
         """Override to fetch latest_checkpoint from telemetry service"""
@@ -162,9 +151,14 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             space_slug = obj.space.slug_name
             device_id = str(obj.device.id)
 
+            organization_slug = ""
+            request = self.context.get("request")
+            if request and hasattr(request, "tenant"):
+                organization_slug = request.tenant.slug_name
+
             telemetry_client = TelemetryServiceClient()
             location = telemetry_client.get_last_location(
-                device_id, self.request.tenant.slug_name, space_slug
+                device_id, organization_slug, space_slug
             )
 
             if location:
@@ -172,7 +166,6 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
                     timestamp=str(location.timestamp),
                     latitude=location.latitude,
                     longitude=location.longitude,
-                    accuracy=location.accuracy,
                 )
             return None
         except Exception as e:
@@ -208,7 +201,6 @@ class CheckpointSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     longitude = serializers.FloatField()
     latitude = serializers.FloatField()
-    accuracy = serializers.FloatField()
 
 
 class TripListSerializer(serializers.ModelSerializer):
