@@ -371,7 +371,6 @@ class TripAnalyzerService:
                     timestamp=loc.timestamp,
                     latitude=loc.latitude,
                     longitude=loc.longitude,
-                    accuracy=loc.accuracy,
                     device_id=device_id,
                 )
             )

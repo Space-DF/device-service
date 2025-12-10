@@ -55,7 +55,6 @@ class LocationPoint:
     timestamp: datetime
     latitude: float
     longitude: float
-    accuracy: float
     device_id: str
 
 
@@ -151,7 +150,6 @@ class TelemetryServiceClient:
                         timestamp=_parse_timestamp(loc.get("timestamp", "")),
                         latitude=loc.get("latitude", 0),
                         longitude=loc.get("longitude", 0),
-                        accuracy=loc.get("accuracy", 0),
                         device_id=device_id,
                     )
                 )
@@ -221,7 +219,6 @@ class TelemetryServiceClient:
                 timestamp=_parse_timestamp(data.get("timestamp", "")),
                 latitude=data.get("latitude", 0),
                 longitude=data.get("longitude", 0),
-                accuracy=data.get("accuracy", 0),
                 device_id=device_id,
             )
 
