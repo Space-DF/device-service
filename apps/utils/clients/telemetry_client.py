@@ -2,13 +2,16 @@
 Telemetry Service Client for fetching location history data
 """
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 
 import requests
 from django.conf import settings
 from django.utils import timezone
 from requests.exceptions import RequestException, Timeout
+
+from apps.device.constants import DEFAULT_DISTANCE_THRESHOLD, LocationPoint
+from apps.device.services.kalman_filter import KalmanFilterProcessor
+from apps.utils.haversine_distance import haversine_distance
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +51,6 @@ def _parse_timestamp(timestamp: str) -> datetime:
     raise ValueError(f"Unable to parse timestamp: {timestamp}")
 
 
-@dataclass
-class LocationPoint:
-    """Data class for a single location point"""
-
-    timestamp: datetime
-    latitude: float
-    longitude: float
-    device_id: str
-
-
 class TelemetryServiceClient:
     """Client for interacting with the Telemetry Service API"""
 
@@ -73,6 +66,44 @@ class TelemetryServiceClient:
         )
         self.timeout = 30  # seconds
 
+    def _deduplicate_locations(
+        self,
+        locations: list[LocationPoint],
+        distance_threshold_meters: float = DEFAULT_DISTANCE_THRESHOLD,
+    ) -> list[LocationPoint]:
+        """
+        Remove duplicate/nearby locations within distance threshold.
+
+        Args:
+            locations: List of location points sorted by timestamp
+            distance_threshold_meters: Distance threshold in meters (default: 50m)
+
+        Returns:
+            Deduplicated list of locations
+        """
+        if not locations or len(locations) == 1:
+            return locations
+
+        deduplicated = [locations[0]]
+
+        for current in locations[1:]:
+            last = deduplicated[-1]
+            distance = haversine_distance(
+                last.latitude, last.longitude, current.latitude, current.longitude
+            )
+
+            if distance > distance_threshold_meters:
+                deduplicated.append(current)
+
+        removed_count = len(locations) - len(deduplicated)
+        if removed_count > 0:
+            logger.debug(
+                f"Deduplication removed {removed_count} duplicate locations "
+                f"(threshold: {distance_threshold_meters}m)"
+            )
+
+        return deduplicated
+
     def get_location_history(
         self,
         device_id: str,
@@ -81,9 +112,18 @@ class TelemetryServiceClient:
         start: datetime,
         end: datetime | None = None,
         limit: int = 10000,
+        deduplicate: bool = True,
+        distance_threshold_meters: float = DEFAULT_DISTANCE_THRESHOLD,
+        use_trajectory_processing: bool = True,
     ) -> list[LocationPoint]:
         """
         Fetch location history for a device from the telemetry service
+
+        Applies trajectory processing:
+        1. Remove duplicate/nearby points (GPS noise)
+        2. Remove outliers (impossible speeds)
+        3. Smooth coordinates (Kalman filter)
+        4. Compress trajectory (remove collinear points)
 
         Args:
             device_id: The device ID to fetch data for
@@ -91,9 +131,12 @@ class TelemetryServiceClient:
             start: Start timestamp (optional)
             end: End timestamp (optional)
             limit: Maximum number of records to fetch
+            deduplicate: Remove nearby duplicate points (default: True)
+            distance_threshold_meters: Distance threshold for deduplication (default: 50m)
+            use_trajectory_processing: Apply Kalman Filter processing (default: True)
 
         Returns:
-            List of location data points sorted by timestamp
+            List of location data points sorted by timestamp, cleaned and processed
 
         Raises:
             RequestException: If the API call fails
@@ -141,7 +184,7 @@ class TelemetryServiceClient:
 
             data = response.json()
             locations = data.get("locations", [])
-            logger.info(f"Received {len(locations)} locations")
+            logger.info(f"Received {len(locations)} raw locations")
 
             formatted_locations: list[LocationPoint] = []
             for loc in locations:
@@ -152,6 +195,26 @@ class TelemetryServiceClient:
                         longitude=loc.get("longitude", 0),
                         device_id=device_id,
                     )
+                )
+
+            # Apply deduplication if requested
+            if deduplicate and formatted_locations:
+                formatted_locations = self._deduplicate_locations(
+                    formatted_locations, distance_threshold_meters
+                )
+                logger.info(
+                    f"After deduplication: {len(formatted_locations)} locations"
+                )
+
+            # Apply Kalman Filter trajectory processing
+            if use_trajectory_processing and len(formatted_locations) >= 2:
+                processor = KalmanFilterProcessor()
+                formatted_locations = processor.process_trajectory(
+                    formatted_locations, device_id
+                )
+                logger.info(
+                    f"After Kalman processing: {len(formatted_locations)} locations "
+                    f"(compression ratio: {len(data.get('locations', [])) / max(len(formatted_locations), 1):.2f}x)"
                 )
 
             return formatted_locations
