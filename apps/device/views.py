@@ -126,7 +126,7 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         space = self._get_space()
-        dev_eui = serializer.validated_data.pop("dev_eui")
+        dev_eui = serializer.validated_data.pop("dev_eui").lower()
         device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
         if not device:
             return Response(

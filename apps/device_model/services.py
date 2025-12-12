@@ -9,6 +9,10 @@ default_device_models = [
         "name": "lorawan",
         "device_type": "RAK4630",
     },
+    {
+        "name": "lorawan",
+        "device_type": "WLBV1",
+    },
 ]
 
 
