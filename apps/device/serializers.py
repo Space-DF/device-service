@@ -2,6 +2,7 @@ import logging
 from typing import Optional, TypedDict
 
 from common.utils.custom_fields import HexCharField
+from common.utils.telemetry_client import TelemetryServiceClient
 from django.core.cache import cache
 from django.db import transaction
 from rest_framework import serializers
@@ -15,7 +16,6 @@ from apps.device.models import (
 )
 from apps.device_model.serializers import DeviceModelSerializer
 from apps.network_server.serializers import NetworkServerSerializer
-from apps.utils.clients.telemetry_client import TelemetryServiceClient
 
 logger = logging.getLogger(__name__)
 

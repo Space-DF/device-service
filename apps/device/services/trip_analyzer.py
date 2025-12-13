@@ -9,11 +9,11 @@ from math import asin, cos, radians, sin, sqrt
 from typing import List, Tuple
 
 import pytz
+from common.utils.telemetry_client import LocationPoint, TelemetryServiceClient
 from django.conf import settings
 from django.db import transaction
 
 from apps.device.models import SpaceDevice, Trip
-from apps.utils.clients.telemetry_client import LocationPoint, TelemetryServiceClient
 
 logger = logging.getLogger(__name__)
 
