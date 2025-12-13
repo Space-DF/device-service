@@ -4,15 +4,23 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('device_model', '0005_devicemodel_key_feature'),
+        ("device_model", "0005_devicemodel_key_feature"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='devicemodel',
-            name='key_feature',
-            field=models.CharField(blank=True, choices=[('water_depth', 'Water Depth Type'), ('location', 'Location Type')], default='location', max_length=255, null=True),
+            model_name="devicemodel",
+            name="key_feature",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("water_depth", "Water Depth Type"),
+                    ("location", "Location Type"),
+                ],
+                default="location",
+                max_length=255,
+                null=True,
+            ),
         ),
     ]
