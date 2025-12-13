@@ -3,6 +3,8 @@ import uuid
 from common.apps.space.models import BaseModel
 from django.db import models
 
+from apps.device_model.contants import KeyFeature
+
 
 class DeviceManufacture(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -28,6 +30,13 @@ class DeviceModel(BaseModel):
         on_delete=models.CASCADE,
         blank=True,
         null=True,
+    )
+    key_feature = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        choices=KeyFeature.choices,
+        default=KeyFeature.MULTI_SENSOR_TRACKER,
     )
     default_config = models.JSONField(blank=True, null=True)
 

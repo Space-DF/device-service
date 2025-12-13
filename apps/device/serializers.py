@@ -69,6 +69,7 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
 
 class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
+    device_profile = DeviceModelSerializer(read_only=True, source="device_model")
 
     class Meta:
         model = Device
@@ -76,6 +77,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "id",
             "network_server",
             "device_model",
+            "device_profile",
             "status",
             "lorawan_device",
             "is_published",
@@ -140,13 +142,13 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "description", "device"]
 
     def to_representation(self, instance: SpaceDevice):
-        """Override to fetch latest_checkpoint from telemetry service"""
+        """Override to fetch device_properties from telemetry service"""
         data = super().to_representation(instance)
-        data["latest_checkpoint"] = self._get_latest_checkpoint(instance)
+        data["device_properties"] = self._get_device_properties(instance)
         return data
 
-    def _get_latest_checkpoint(self, obj: SpaceDevice) -> Optional[Checkpoint]:
-        """Fetch the latest checkpoint from telemetry service"""
+    def _get_device_properties(self, obj: SpaceDevice) -> Optional[dict]:
+        """Fetch all device properties from telemetry service"""
         try:
             space_slug = obj.space.slug_name
             device_id = str(obj.device.id)
@@ -157,20 +159,14 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
                 organization_slug = request.tenant.slug_name
 
             telemetry_client = TelemetryServiceClient()
-            location = telemetry_client.get_last_location(
+            device_props = telemetry_client.get_device_properties(
                 device_id, organization_slug, space_slug
             )
 
-            if location:
-                return Checkpoint(
-                    timestamp=str(location.timestamp),
-                    latitude=location.latitude,
-                    longitude=location.longitude,
-                )
-            return None
+            return device_props if device_props else None
         except Exception as e:
             logger.error(
-                f"Error fetching latest checkpoint for device {obj.device.id}: {e}"
+                f"Error fetching device properties for device {obj.device.id}: {e}"
             )
             return None
 
