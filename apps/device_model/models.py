@@ -36,7 +36,7 @@ class DeviceModel(BaseModel):
         blank=True,
         null=True,
         choices=KeyFeature.choices,
-        default=KeyFeature.MULTI_SENSOR_TRACKER,
+        default=KeyFeature.LOCATION_TYPE,
     )
     default_config = models.JSONField(blank=True, null=True)
 
