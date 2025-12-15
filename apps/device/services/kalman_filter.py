@@ -33,12 +33,13 @@ class KalmanFilterProcessor:
         self, locations: List[LocationPoint], device_id: str
     ) -> List[LocationPoint]:
         """
-        Process trajectory: filter outliers → compress → smooth.
+        Process trajectory: filter outliers → deduplicate → compress → smooth.
 
         Optimal order:
         1. Filter outliers (impossible speeds)
-        2. Compress with Douglas-Peucker (preserve shape before smoothing)
-        3. Smooth with Kalman (remove remaining noise)
+        2. Deduplicate consecutive identical points
+        3. Compress with Douglas-Peucker (preserve shape before smoothing)
+        4. Smooth with Kalman (remove remaining noise)
         """
         if len(locations) < 2:
             return locations
@@ -47,7 +48,11 @@ class KalmanFilterProcessor:
         if len(filtered) < 2:
             return filtered
 
-        compressed = self._compress_trajectory(filtered)
+        deduplicated = self._deduplicate_identical_points(filtered)
+        if len(deduplicated) < 2:
+            return deduplicated
+
+        compressed = self._compress_trajectory(deduplicated)
         if len(compressed) < 2:
             return compressed
 
@@ -55,7 +60,7 @@ class KalmanFilterProcessor:
 
         logger.debug(
             f"Device {device_id}: {len(locations)} → {len(filtered)} → "
-            f"{len(compressed)} → {len(smoothed)} points"
+            f"{len(deduplicated)} → {len(compressed)} → {len(smoothed)} points"
         )
         return smoothed
 
@@ -84,6 +89,26 @@ class KalmanFilterProcessor:
                 )
 
         return filtered
+
+    def _deduplicate_identical_points(
+        self, locations: List[LocationPoint]
+    ) -> List[LocationPoint]:
+        """
+        Remove consecutive points with identical coordinates.
+        Keeps the first occurrence of each consecutive group of identical locations.
+        """
+        if len(locations) < 2:
+            return locations
+
+        deduplicated = [locations[0]]
+        for curr in locations[1:]:
+            prev = deduplicated[-1]
+            if curr.latitude != prev.latitude or curr.longitude != prev.longitude:
+                deduplicated.append(curr)
+            else:
+                logger.debug(f"Duplicate removed: ({curr.latitude}, {curr.longitude})")
+
+        return deduplicated
 
     def _apply_kalman_smoothing(
         self, locations: List[LocationPoint]

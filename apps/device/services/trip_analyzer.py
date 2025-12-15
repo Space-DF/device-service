@@ -13,9 +13,8 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.device.models import SpaceDevice, Trip
-from apps.utils.clients.telemetry_client import LocationPoint, TelemetryServiceClient
+from apps.device.services.kalman_filter import KalmanFilterProcessor
 from apps.utils.haversine_distance import haversine_distance
-
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +321,8 @@ class TripAnalyzerService:
 
         Args:
             trip: Trip model instance
-            space_slug: Organization slug
+            organization_slug: Organization slug
+            space_slug: Space slug
 
         Returns:
             TripWithLocations data class with trip data and location points
@@ -337,12 +337,14 @@ class TripAnalyzerService:
             start=trip.started_at,
             end=trip.last_report if trip.is_finished else None,
             limit=10000,
-            deduplicate=True,
-            distance_threshold_meters=50.0,
-            use_trajectory_processing=True,
         )
 
-        location_points: list[LocationPoint] = raw_locations
+        # Apply Kalman filter to smooth trajectory and remove noise
+        if raw_locations:
+            kalman_filter = KalmanFilterProcessor()
+            location_points = kalman_filter.process_trajectory(raw_locations, device_id)
+        else:
+            location_points = raw_locations
 
         return TripWithLocations(
             id=str(trip.id),
