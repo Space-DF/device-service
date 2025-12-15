@@ -182,6 +182,7 @@ class TripViewSet(
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
+    ordering = ["-last_report"]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
