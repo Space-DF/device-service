@@ -4,7 +4,6 @@ from rest_framework.routers import DefaultRouter
 from apps.device.views import (
     DeleteSpaceDeviceViewSet,
     DeviceLookupView,
-    DeviceTransformedDataViewSet,
     DeviceViewSet,
     FindDeviceByCodeView,
     ListCreateSpaceDeviceViewSet,
@@ -15,7 +14,6 @@ app_name = "device"
 
 router = DefaultRouter()
 router.register("devices", DeviceViewSet)
-router.register("device-transformed-data", DeviceTransformedDataViewSet)
 router.register("trips", TripViewSet, basename="trip")
 
 urlpatterns = [
