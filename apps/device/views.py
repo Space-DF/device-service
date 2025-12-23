@@ -14,11 +14,10 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
 from apps.device.contants import DeviceStatus
-from apps.device.models import Device, DeviceTransformedData, SpaceDevice, Trip
+from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
-    DeviceTransformedDataSerializer,
     FormatDeviceSerializer,
     GetDeviceSerializer,
     SpaceDeviceSerializer,
@@ -169,11 +168,6 @@ class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method == "GET":
             return SpaceDeviceSerializer
         return UpdateSpaceDeviceSerializer
-
-
-class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = DeviceTransformedData.objects.all()
-    serializer_class = DeviceTransformedDataSerializer
 
 
 class TripViewSet(
