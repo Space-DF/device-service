@@ -7,13 +7,7 @@ from django.core.cache import cache
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.device.models import (
-    Device,
-    DeviceTransformedData,
-    LorawanDevice,
-    SpaceDevice,
-    Trip,
-)
+from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
 from apps.device_model.serializers import DeviceModelSerializer
 from apps.network_server.serializers import NetworkServerSerializer
 
@@ -183,12 +177,6 @@ class UpdateSpaceDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = SpaceDevice
         fields = ["name", "description"]
-
-
-class DeviceTransformedDataSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DeviceTransformedData
-        fields = "__all__"
 
 
 class CheckpointSerializer(serializers.Serializer):

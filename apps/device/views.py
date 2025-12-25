@@ -14,11 +14,10 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
 from apps.device.contants import DeviceStatus
-from apps.device.models import Device, DeviceTransformedData, SpaceDevice, Trip
+from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
-    DeviceTransformedDataSerializer,
     FormatDeviceSerializer,
     GetDeviceSerializer,
     SpaceDeviceSerializer,
@@ -171,17 +170,13 @@ class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
         return UpdateSpaceDeviceSerializer
 
 
-class DeviceTransformedDataViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = DeviceTransformedData.objects.all()
-    serializer_class = DeviceTransformedDataSerializer
-
-
 class TripViewSet(
     mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
+    ordering = ["-last_report"]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):

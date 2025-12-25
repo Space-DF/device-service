@@ -148,15 +148,6 @@ CELERY_TASKS = [
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost")
 NEW_ORGANIZATION_HANDLER = "apps.device.handlers.NewOrganizationHandler"
 
-# Transformer ingestion queue/routing config
-TRANSFORMER_AMQP_EXCHANGE = os.getenv("TRANSFORMER_AMQP_EXCHANGE", "")
-TRANSFORMER_AMQP_ROUTING_KEY = os.getenv(
-    "TRANSFORMER_AMQP_ROUTING_KEY", "transformed/device/location"
-)
-TRANSFORMER_DEVICE_QUEUE = os.getenv(
-    "TRANSFORMER_DEVICE_QUEUE", "transformed/device/location"
-)
-
 # Middleware settings
 PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static"]
 
