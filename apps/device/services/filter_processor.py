@@ -3,9 +3,7 @@ from typing import List
 
 from apps.device.constants import (
     DEFAULT_MAX_SPEED_KMH,
-    DEFAULT_MEASUREMENT_NOISE,
     DEFAULT_MIN_POINT_DISTANCE,
-    DEFAULT_PROCESS_NOISE,
     LocationPoint,
 )
 from apps.utils.haversine_distance import haversine_distance
@@ -13,19 +11,13 @@ from apps.utils.haversine_distance import haversine_distance
 logger = logging.getLogger(__name__)
 
 
-class KalmanFilterProcessor:
+class FilterProcessor:
     """
-    Pure Python Kalman Filter for GPS trajectory smoothing.
-
-    Pipeline:
-    1. Filter outliers (impossible speeds based on max_speed_kmh)
-    2. Smooth coordinates (1D Kalman filter + RTS smoother per coordinate)
-    3. Compress trajectory (Douglas-Peucker simplification)
+    Pure Python Filter for GPS trajectory smoothing.
+    Combines outlier filtering, deduplication, trajectory compression,
     """
 
     def __init__(self):
-        self.process_noise = DEFAULT_PROCESS_NOISE
-        self.measurement_noise = DEFAULT_MEASUREMENT_NOISE
         self.max_speed_kmh = DEFAULT_MAX_SPEED_KMH
         self.min_point_distance = DEFAULT_MIN_POINT_DISTANCE
 
@@ -33,13 +25,12 @@ class KalmanFilterProcessor:
         self, locations: List[LocationPoint], device_id: str
     ) -> List[LocationPoint]:
         """
-        Process trajectory: filter outliers → deduplicate → compress → smooth.
+        Process trajectory: filter outliers → deduplicate → compress.
 
         Optimal order:
         1. Filter outliers (impossible speeds)
         2. Deduplicate consecutive identical points
         3. Compress with Douglas-Peucker (preserve shape before smoothing)
-        4. Smooth with Kalman (remove remaining noise)
         """
         if len(locations) < 2:
             return locations
@@ -56,13 +47,11 @@ class KalmanFilterProcessor:
         if len(compressed) < 2:
             return compressed
 
-        smoothed = self._apply_kalman_smoothing(compressed)
-
         logger.debug(
             f"Device {device_id}: {len(locations)} → {len(filtered)} → "
-            f"{len(deduplicated)} → {len(compressed)} → {len(smoothed)} points"
+            f"{len(deduplicated)} → {len(compressed)} points"
         )
-        return smoothed
+        return compressed
 
     def _filter_outliers(self, locations: List[LocationPoint]) -> List[LocationPoint]:
         if len(locations) < 2:
@@ -109,101 +98,6 @@ class KalmanFilterProcessor:
                 logger.debug(f"Duplicate removed: ({curr.latitude}, {curr.longitude})")
 
         return deduplicated
-
-    def _apply_kalman_smoothing(
-        self, locations: List[LocationPoint]
-    ) -> List[LocationPoint]:
-        """
-        Apply Kalman filter to smooth latitude and longitude coordinates.
-
-        Uses 1D Kalman filter for each coordinate independently (lat and lon).
-        Much simpler than multi-dimensional approach but still effective for GPS smoothing.
-        """
-        if len(locations) < 2:
-            return locations
-
-        # Apply 1D Kalman filter for latitude and longitude separately
-        smoothed_lats = self._kalman_1d(
-            [loc.latitude for loc in locations],
-            self.process_noise,
-            self.measurement_noise,
-        )
-
-        smoothed_lons = self._kalman_1d(
-            [loc.longitude for loc in locations],
-            self.process_noise,
-            self.measurement_noise,
-        )
-
-        # Reconstruct locations with smoothed coordinates
-        smoothed = []
-        for i, loc in enumerate(locations):
-            smoothed_loc = LocationPoint(
-                timestamp=loc.timestamp,
-                latitude=smoothed_lats[i],
-                longitude=smoothed_lons[i],
-                device_id=loc.device_id,
-            )
-            smoothed.append(smoothed_loc)
-
-        return smoothed
-
-    @staticmethod
-    def _kalman_1d(
-        measurements: List[float], process_noise: float, measurement_noise: float
-    ) -> List[float]:
-        """
-        1D Kalman filter implementation.
-
-        Assumes constant velocity model: x(t+1) = x(t) + v*dt
-
-        Args:
-            measurements: List of measured values
-            process_noise: Process noise variance (Q)
-            measurement_noise: Measurement noise variance (R)
-
-        Returns:
-            List of smoothed values
-        """
-        if not measurements:
-            return []
-
-        n = len(measurements)
-
-        # Forward pass: Kalman filter
-        x_prior = [0.0] * n
-        x_posterior = [0.0] * n
-        p_prior = [1.0] * n
-        p_posterior = [1.0] * n
-
-        # Initialize with first measurement
-        x_posterior[0] = measurements[0]
-        p_posterior[0] = measurement_noise
-
-        for k in range(1, n):
-            x_prior[k] = x_posterior[k - 1]
-            p_prior[k] = p_posterior[k - 1] + process_noise
-
-            innovation = measurements[k] - x_prior[k]
-            innovation_cov = p_prior[k] + measurement_noise
-            kalman_gain = p_prior[k] / innovation_cov
-
-            x_posterior[k] = x_prior[k] + kalman_gain * innovation
-            p_posterior[k] = (1 - kalman_gain) * p_prior[k]
-
-        # Backward pass: RTS smoother (Rauch-Tung-Striebel)
-        smoothed = [0.0] * n
-        smoothed[-1] = x_posterior[-1]
-
-        for k in range(n - 2, -1, -1):
-            smoother_gain = (
-                p_posterior[k] / p_prior[k + 1] if p_prior[k + 1] != 0 else 0
-            )
-            smoothed[k] = x_posterior[k] + smoother_gain * (
-                smoothed[k + 1] - x_prior[k + 1]
-            )
-
-        return smoothed
 
     def _compress_trajectory(
         self, locations: List[LocationPoint]

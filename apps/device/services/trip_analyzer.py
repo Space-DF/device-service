@@ -13,7 +13,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.device.models import SpaceDevice, Trip
-from apps.device.services.kalman_filter import KalmanFilterProcessor
+from apps.device.services.filter_processor import FilterProcessor
 from apps.utils.haversine_distance import haversine_distance
 
 logger = logging.getLogger(__name__)
@@ -339,10 +339,12 @@ class TripAnalyzerService:
             limit=10000,
         )
 
-        # Apply Kalman filter to smooth trajectory and remove noise
+        # Apply filter to trajectory and remove noise
         if raw_locations:
-            kalman_filter = KalmanFilterProcessor()
-            location_points = kalman_filter.process_trajectory(raw_locations, device_id)
+            filter_processor = FilterProcessor()
+            location_points = filter_processor.process_trajectory(
+                raw_locations, device_id
+            )
         else:
             location_points = raw_locations
 
