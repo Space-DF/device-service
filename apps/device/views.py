@@ -4,6 +4,7 @@ from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from django.db.models import OuterRef, Subquery
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -273,7 +274,6 @@ class TripViewSet(
 class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
     serializer_class = FormatDeviceSerializer
     lookup_field = "lorawan_device__dev_eui"
-    lookup_url_kwarg = "dev_eui"
     queryset = Device.objects.select_related(
         "device_model", "device_model__manufacture", "lorawan_device"
     ).prefetch_related("space_devices")
@@ -288,11 +288,18 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
 
         return qs.annotate(space_slug=space_slug)
 
+    def get_object(self):
+        dev_eui = self.kwargs.get("dev_eui").lower()
+        return get_object_or_404(
+            self.get_queryset(),
+            lorawan_device__dev_eui=dev_eui,
+        )
+
     def get(self, request, *args, **kwargs):
         try:
             device = self.get_object()
         except Device.DoesNotExist:
-            dev_eui = kwargs.get(self.lookup_url_kwarg)
+            dev_eui = kwargs.get("dev_eui")
             return Response(
                 {"detail": f"Device with DevEUI '{dev_eui}' not found."},
                 status=status.HTTP_404_NOT_FOUND,
