@@ -5,7 +5,6 @@ Analyzes device location data to detect and manage trips based on movement patte
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from math import asin, cos, radians, sin, sqrt
 from typing import List, Tuple
 
 import pytz
@@ -14,6 +13,8 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.device.models import SpaceDevice, Trip
+from apps.device.services.filter_processor import FilterProcessor
+from apps.utils.haversine_distance import haversine_distance
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +158,9 @@ class TripAnalyzerService:
 
                 continue
 
-            distance = self._calculate_distance(prev_coords, coords)
+            lat1, lon1 = prev_coords
+            lat2, lon2 = coords
+            distance = haversine_distance(lat1, lon1, lat2, lon2)
             time_diff_min = (loc.timestamp - prev_time).total_seconds() / 60.0
 
             logger.info(
@@ -193,7 +196,9 @@ class TripAnalyzerService:
 
             # Device is moving
             if in_long_stop and stop_ref_coords is not None:
-                moved_from_stop = self._calculate_distance(stop_ref_coords, coords)
+                lat1, lon1 = stop_ref_coords
+                lat2, lon2 = coords
+                moved_from_stop = haversine_distance(lat1, lon1, lat2, lon2)
                 logger.info(
                     "Device %s moved_from_stop=%.2fm (threshold=%sm)",
                     space_device.device_id,
@@ -308,36 +313,6 @@ class TripAnalyzerService:
         )
         return trip
 
-    def _calculate_distance(
-        self, coord1: Tuple[float, float], coord2: Tuple[float, float]
-    ) -> float:
-        """
-        Calculate distance between two GPS coordinates using Haversine formula
-
-        Args:
-            coord1: (latitude, longitude) tuple
-            coord2: (latitude, longitude) tuple
-
-        Returns:
-            Distance in meters
-        """
-        lat1, lon1 = coord1
-        lat2, lon2 = coord2
-
-        # Radius of Earth in meters
-        R = 6371000
-
-        # Convert to radians
-        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-
-        # Haversine formula
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-        c = 2 * asin(sqrt(a))
-
-        return R * c
-
     def get_trip_with_locations(
         self, trip: Trip, organization_slug: str, space_slug: str
     ) -> TripWithLocations:
@@ -346,7 +321,8 @@ class TripAnalyzerService:
 
         Args:
             trip: Trip model instance
-            space_slug: Organization slug
+            organization_slug: Organization slug
+            space_slug: Space slug
 
         Returns:
             TripWithLocations data class with trip data and location points
@@ -363,17 +339,14 @@ class TripAnalyzerService:
             limit=10000,
         )
 
-        # Convert raw location dicts to LocationPoint objects
-        location_points: list[LocationPoint] = []
-        for loc in raw_locations:
-            location_points.append(
-                LocationPoint(
-                    timestamp=loc.timestamp,
-                    latitude=loc.latitude,
-                    longitude=loc.longitude,
-                    device_id=device_id,
-                )
+        # Apply filter to trajectory and remove noise
+        if raw_locations:
+            filter_processor = FilterProcessor()
+            location_points = filter_processor.process_trajectory(
+                raw_locations, device_id
             )
+        else:
+            location_points = raw_locations
 
         return TripWithLocations(
             id=str(trip.id),
