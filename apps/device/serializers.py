@@ -80,30 +80,52 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lorawan_data = validated_data.pop("lorawan_device", None)
-        device = Device.objects.create(**validated_data)
+        try:
+            device = Device.objects.create(**validated_data)
+            logger.info(f"Device created successfully with ID: {device.id}")
 
-        if lorawan_data:
-            LorawanDevice.objects.create(device=device, **lorawan_data)
+            if lorawan_data:
+                LorawanDevice.objects.create(device=device, **lorawan_data)
+                logger.info(f"LoRaWAN device created for device {device.id}")
 
-        return device
+            return device
+        except Exception as e:
+            logger.error(f"Failed to create device: {str(e)}", exc_info=True)
+            raise
 
     def update(self, instance, validated_data):
         lorawan_data = validated_data.pop("lorawan_device", None)
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
+        try:
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+            logger.info(f"Device {instance.id} updated successfully")
+        except Exception as e:
+            logger.error(
+                f"Failed to update device {instance.id}: {str(e)}", exc_info=True
+            )
+            raise
 
         if lorawan_data:
-            lorawan_instance = getattr(instance, "lorawan_device", None)
-            if lorawan_instance:
-                lorawan_serializer = LorawanDeviceSerializer(
-                    instance=lorawan_instance, data=lorawan_data, partial=True
+            try:
+                lorawan_instance = getattr(instance, "lorawan_device", None)
+                if lorawan_instance:
+                    lorawan_serializer = LorawanDeviceSerializer(
+                        instance=lorawan_instance, data=lorawan_data, partial=True
+                    )
+                    lorawan_serializer.is_valid(raise_exception=True)
+                    lorawan_serializer.save()
+                    logger.info(f"LoRaWAN device updated for device {instance.id}")
+                else:
+                    LorawanDevice.objects.create(device=instance, **lorawan_data)
+                    logger.info(f"New LoRaWAN device created for device {instance.id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to update LoRaWAN device for {instance.id}: {str(e)}",
+                    exc_info=True,
                 )
-                lorawan_serializer.is_valid(raise_exception=True)
-                lorawan_serializer.save()
-            else:
-                LorawanDevice.objects.create(device=instance, **lorawan_data)
+                raise
 
         request = self.context.get("request")
         org = request.headers.get("X-Organization")
@@ -112,9 +134,9 @@ class DeviceSerializer(serializers.ModelSerializer):
             cache_key = f"{org}:lorawan:{dev_eui}"
             try:
                 cache.delete(cache_key)
-                logger.debug("Deleted device cache key successfully")
-            except Exception:
-                logger.warning("Failed to delete cache key")
+                logger.debug(f"Deleted device cache key: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Failed to delete cache key {cache_key}: {str(e)}")
 
         return instance
 
@@ -146,6 +168,9 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         try:
             space_slug = obj.space.slug_name
             device_id = str(obj.device.id)
+            logger.debug(
+                f"Fetching device properties for device {device_id} in space {space_slug}"
+            )
 
             organization_slug = ""
             request = self.context.get("request")
@@ -157,10 +182,13 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
                 device_id, organization_slug, space_slug
             )
 
+            logger.info(
+                f"Successfully fetched device properties for device {device_id}"
+            )
             return device_props if device_props else None
         except Exception as e:
             logger.error(
-                f"Error fetching device properties for device {obj.device.id}: {e}"
+                f"Error fetching device properties for device {obj.device.id}: {str(e)}"
             )
             return None
 

@@ -7,7 +7,7 @@ from django.db.models.functions import Greatest
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
-from apps.device.contants import DeviceStatus
+from apps.device.constants import DeviceStatus
 from apps.device.models import Device, SpaceDevice
 
 

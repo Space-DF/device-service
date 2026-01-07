@@ -14,7 +14,7 @@ from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
-from apps.device.contants import DeviceStatus
+from apps.device.constants import DeviceStatus
 from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
