@@ -3,7 +3,7 @@ import uuid
 from common.apps.space.models import BaseModel, Space
 from django.db import models
 
-from apps.device.contants import DeviceStatus
+from apps.device.constants import DeviceStatus
 from apps.device_model.models import DeviceModel
 from apps.network_server.models import NetworkServer
 

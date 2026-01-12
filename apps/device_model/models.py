@@ -3,7 +3,7 @@ import uuid
 from common.apps.space.models import BaseModel
 from django.db import models
 
-from apps.device_model.contants import KeyFeature
+from apps.device_model.constants import KeyFeature
 
 
 class DeviceManufacture(BaseModel):

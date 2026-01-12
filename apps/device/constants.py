@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from django.db import models
+
 # Filter Constants
 DEFAULT_MAX_SPEED_KMH = 150.0
 DEFAULT_MIN_POINT_DISTANCE = 10.0  # meters
@@ -14,3 +16,8 @@ class LocationPoint:
     latitude: float
     longitude: float
     device_id: str
+
+
+class DeviceStatus(models.TextChoices):
+    ACTIVE = "active"
+    IN_INVENTORY = "in_inventory"

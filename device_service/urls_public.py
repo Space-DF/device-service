@@ -27,9 +27,9 @@ schema_view = get_tenant_schema_view(
     openapi.Info(
         title="SPACEDF DEVICE API",
         default_version="v1",
-        terms_of_service="https://www.google.com/policies/terms/",
-        contact=openapi.Contact(email="contact@snippets.local"),
-        license=openapi.License(name="BSD License"),
+        terms_of_service="https://spacedf.com/terms-of-service",
+        contact=openapi.Contact(email="hello@df.technology"),
+        license=openapi.License(name="Apache 2.0"),
     ),
     path="/api/",
     public=True,
