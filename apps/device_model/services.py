@@ -13,6 +13,14 @@ default_device_models = [
         "name": "lorawan",
         "device_type": "WLBV1",
     },
+    {
+        "name": "lorawan",
+        "device_type": "SENSECAP_T1000",
+    },
+    {
+        "name": "lorawan",
+        "device_type": "ABEEWAY_INDUSTRIAL_TRACKER",
+    },
 ]
 
 
