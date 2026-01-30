@@ -65,6 +65,15 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
+    filter_backends = [SearchFilter]
+    search_fields = [
+        "name",
+        "description",
+        "id",
+        "device__lorawan_device__dev_eui",
+        "device__id",
+        "device__device_model__name",
+    ]
 
     def get_serializer_class(self):
         if self.request.method == "POST":
