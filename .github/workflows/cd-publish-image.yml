@@ -1,4 +1,4 @@
-name: Build & Deploy to PROD
+name: Publish Docker Image
 
 on:
   release:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
 
     permissions:
@@ -37,7 +37,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Docker metadata
+      - name: Generate Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -45,7 +45,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
 
-      - name: Build & Push Docker image
+      - name: Build & Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
