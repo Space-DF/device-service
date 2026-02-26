@@ -56,7 +56,6 @@ SHARED_APPS = [
 TENANT_APPS = [
     "django.contrib.auth",
     "common.apps.space",
-    "apps.device_model",
     "apps.device",
     "apps.device_connector",
     "apps.network_server",
@@ -175,6 +174,11 @@ EMQX_HOST = os.getenv("EMQX_HOST", "http://emqx:18083/api/v5")
 
 # Telemetry Service Configuration
 TELEMETRY_SERVICE_URL = os.getenv("TELEMETRY_SERVICE_URL", "http://telemetry:8080")
+
+# Transformer Service Configuration
+TRANSFORMER_SERVICE_URL = os.getenv(
+    "TRANSFORMER_SERVICE_URL", "http://transformer:8080"
+)
 
 # Redis cache
 CACHES = {

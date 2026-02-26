@@ -1,12 +1,13 @@
 import logging
 from typing import List
 
+from common.utils.haversine_distance import haversine_distance
+
 from apps.device.constants import (
     DEFAULT_MAX_SPEED_KMH,
     DEFAULT_MIN_POINT_DISTANCE,
     LocationPoint,
 )
-from apps.utils.haversine_distance import haversine_distance
 
 logger = logging.getLogger(__name__)
 
