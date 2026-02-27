@@ -9,7 +9,6 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("device_model", "0001_initial"),
         ("space", "0001_initial"),
     ]
 
@@ -29,12 +28,8 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "device_model",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="devices",
-                        to="device_model.devicemodel",
-                    ),
+                    "device_model_id",
+                    models.CharField(blank=True, null=True),
                 ),
             ],
             options={

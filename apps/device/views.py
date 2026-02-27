@@ -72,7 +72,7 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
         "id",
         "device__lorawan_device__dev_eui",
         "device__id",
-        "device__device_model__name",
+        "device__device_model",
     ]
 
     def get_serializer_class(self):
@@ -283,9 +283,9 @@ class TripViewSet(
 class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
     serializer_class = FormatDeviceSerializer
     lookup_field = "lorawan_device__dev_eui"
-    queryset = Device.objects.select_related(
-        "device_model", "device_model__manufacture", "lorawan_device"
-    ).prefetch_related("space_devices")
+    queryset = Device.objects.select_related("lorawan_device").prefetch_related(
+        "space_devices"
+    )
 
     def get_queryset(self):
         qs = super().get_queryset()

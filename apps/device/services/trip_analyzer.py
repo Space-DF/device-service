@@ -8,13 +8,13 @@ from datetime import datetime, timedelta
 from typing import List, Tuple
 
 import pytz
+from common.utils.haversine_distance import haversine_distance
 from common.utils.telemetry_client import LocationPoint, TelemetryServiceClient
 from django.conf import settings
 from django.db import transaction
 
 from apps.device.models import SpaceDevice, Trip
 from apps.device.services.filter_processor import FilterProcessor
-from apps.utils.haversine_distance import haversine_distance
 
 logger = logging.getLogger(__name__)
 
