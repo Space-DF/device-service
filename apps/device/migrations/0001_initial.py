@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "device_model_id",
-                    models.CharField(blank=True, null=True),
+                    models.UUIDField(blank=True, null=True),
                 ),
             ],
             options={
