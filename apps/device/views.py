@@ -3,6 +3,8 @@ import logging
 from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
+from common.views.space import SpaceListCreateAPIView
+from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,11 +12,12 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, mixins, status, views, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ParseError
+from rest_framework.exceptions import ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
 from apps.device.constants import DeviceStatus
+from apps.device.filters import SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
@@ -62,10 +65,15 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
         )
 
 
-class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
+class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
+    queryset = SpaceDevice.objects.select_related(
+        "device", "device__lorawan_device"
+    ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
-    filter_backends = [SearchFilter]
+    filter_backends = [SearchFilter, DjangoFilterBackend]
+    filterset_class = SpaceDeviceFilter
+    space_field = "space"
     search_fields = [
         "name",
         "description",
@@ -80,61 +88,14 @@ class ListCreateSpaceDeviceViewSet(generics.ListCreateAPIView):
             return CreateSpaceDeviceSerializer
         return SpaceDeviceSerializer
 
-    def _get_space(self):
-        slug_name = self.request.headers.get("X-Space")
-        if not slug_name:
-            raise ParseError("X-Space header is required.")
-        try:
-            return Space.objects.get(slug_name=slug_name)
-        except Space.DoesNotExist:
-            raise NotFound(f"Space with slug_name='{slug_name}' not found.")
-
-    def get_queryset(self):
-        space = self._get_space()
-        include_latest_checkpoint = (
-            str(self.request.GET.get("include_latest_checkpoint", "")).lower() == "true"
-        )
-        queryset = SpaceDevice.objects.filter(space=space).select_related("device")
-        if include_latest_checkpoint:
-            queryset = queryset.select_related("device__lorawan_device")
-        return queryset
-
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                "include_latest_checkpoint",
-                openapi.IN_QUERY,
-                description="Include get_latest_checkpoint in response (true/false)",
-                type=openapi.TYPE_BOOLEAN,
-                default=False,
-            )
-        ]
-    )
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        include_latest_checkpoint = (
-            str(request.query_params.get("include_latest_checkpoint", "")).lower()
-            == "true"
-        )
-        serializer_context = self.get_serializer_context()
-        serializer_context["include_latest_checkpoint"] = include_latest_checkpoint
-
-        if page is not None:
-            serializer = self.get_serializer(
-                page, many=True, context=serializer_context
-            )
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(
-            queryset, many=True, context=serializer_context
-        )
-        return Response(serializer.data)
-
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        space = self._get_space()
+
+        space_slug = request.headers.get("X-Space", None)
+        space = Space.objects.filter(slug_name=space_slug).first()
+
         dev_eui = serializer.validated_data.pop("dev_eui").lower()
         device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
         if not device:
@@ -280,9 +241,8 @@ class TripViewSet(
         return Response(serializer.data)
 
 
-class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
+class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
     serializer_class = FormatDeviceSerializer
-    lookup_field = "lorawan_device__dev_eui"
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
         "space_devices"
     )
@@ -303,14 +263,3 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.GenericAPIView):
             self.get_queryset(),
             lorawan_device__dev_eui=dev_eui,
         )
-
-    def get(self, request, *args, **kwargs):
-        try:
-            device = self.get_object()
-        except Device.DoesNotExist:
-            dev_eui = kwargs.get("dev_eui")
-            return Response(
-                {"detail": f"Device with DevEUI '{dev_eui}' not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response(self.get_serializer(device).data, status=status.HTTP_200_OK)

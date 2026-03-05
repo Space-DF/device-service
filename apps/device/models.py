@@ -1,6 +1,7 @@
 import uuid
 
 from common.apps.space.models import BaseModel, Space
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 
 from apps.device.constants import DeviceStatus
@@ -43,6 +44,12 @@ class SpaceDevice(BaseModel):
     )
     device = models.ForeignKey(
         Device, related_name="space_devices", on_delete=models.CASCADE
+    )
+    location = gis_models.PointField(
+        geography=True,
+        srid=4326,
+        null=True,
+        blank=True,
     )
 
     class Meta:
