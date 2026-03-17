@@ -9,6 +9,7 @@ from django.dispatch import receiver
 
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, SpaceDevice
+from apps.device.services.lorawan_cache_service import clear_lorawan_cache
 
 
 @receiver(post_save, sender=SpaceDevice)
@@ -51,3 +52,26 @@ def handle_device_space_delete(sender, instance, **kwargs):
             "type": "remove",
         },
     )
+
+
+@receiver(pre_delete, sender=Device)
+def handle_device_delete(sender, instance, **kwargs):
+    tenant = connection.get_tenant()
+    slug_name = getattr(tenant, "slug_name", connection.schema_name)
+    lorawan_obj = getattr(instance, "lorawan_device", None)
+    dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
+
+    clear_lorawan_cache(slug_name, dev_eui)
+
+
+@receiver(post_save, sender=Device)
+def handle_device_update(sender, instance, created, **kwargs):
+    if created:
+        return
+
+    tenant = connection.get_tenant()
+    slug_name = getattr(tenant, "slug_name", connection.schema_name)
+    lorawan_obj = getattr(instance, "lorawan_device", None)
+    dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
+
+    clear_lorawan_cache(slug_name, dev_eui)

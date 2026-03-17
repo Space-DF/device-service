@@ -4,7 +4,6 @@ from typing import Optional, TypedDict
 from common.utils.custom_fields import HexCharField
 from common.utils.telemetry_client import TelemetryServiceClient
 from common.utils.tranformer_client import TranformerServiceClient
-from django.core.cache import cache
 from django.db import transaction
 from rest_framework import serializers
 
@@ -138,17 +137,6 @@ class DeviceSerializer(serializers.ModelSerializer):
                     exc_info=True,
                 )
                 raise
-
-        request = self.context.get("request")
-        org = request.headers.get("X-Organization")
-        dev_eui = getattr(getattr(instance, "lorawan_device", None), "dev_eui", None)
-        if org and dev_eui:
-            cache_key = f"{org}:lorawan:{dev_eui}"
-            try:
-                cache.delete(cache_key)
-                logger.debug(f"Deleted device cache key: {cache_key}")
-            except Exception as e:
-                logger.warning(f"Failed to delete cache key {cache_key}: {str(e)}")
 
         return instance
 

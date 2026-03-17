@@ -200,7 +200,7 @@ class TripAnalyzerService:
                 lat2, lon2 = coords
                 moved_from_stop = haversine_distance(lat1, lon1, lat2, lon2)
                 logger.info(
-                    "Device %s moved_from_stop=%.2fm (threshold=%sm)",
+                    "Device %s moved_from_stop=%.2fm (threshold=%sm) is_new=%s",
                     space_device.device_id,
                     moved_from_stop,
                     self.move_distance_meters,
