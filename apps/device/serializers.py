@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, TypedDict
+from typing import Optional
 
 from common.utils.custom_fields import HexCharField
 from common.utils.telemetry_client import TelemetryServiceClient
@@ -11,14 +11,6 @@ from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
 from apps.network_server.serializers import NetworkServerSerializer
 
 logger = logging.getLogger(__name__)
-
-
-class Checkpoint(TypedDict):
-    """A checkpoint with timestamp and coordinates"""
-
-    timestamp: str
-    latitude: float
-    longitude: float
 
 
 class LorawanDeviceSerializer(serializers.ModelSerializer):
@@ -243,14 +235,3 @@ class TripDetailSerializer(TripListSerializer):
 
     class Meta(TripListSerializer.Meta):
         fields = TripListSerializer.Meta.fields + ["checkpoints"]
-
-
-class TripAnalysisSerializer(serializers.Serializer):
-    """Serializer for trip analysis results with telemetry data"""
-
-    id = serializers.UUIDField(read_only=True)
-    space_device_id = serializers.UUIDField(read_only=True)
-    started_at = serializers.DateTimeField(read_only=True)
-    is_finished = serializers.BooleanField(read_only=True)
-    locations = serializers.ListField(child=serializers.DictField(), read_only=True)
-    location_count = serializers.IntegerField(read_only=True)
