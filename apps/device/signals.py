@@ -53,6 +53,14 @@ def handle_device_space_delete(sender, instance, **kwargs):
         },
     )
 
+    send_task(
+        name="delete_device",
+        message={
+            "organization_slug_name": slug_name,
+            "device_id": str(instance.device.id),
+        },
+    )
+
 
 @receiver(pre_delete, sender=Device)
 def handle_device_delete(sender, instance, **kwargs):
