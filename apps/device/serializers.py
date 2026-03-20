@@ -1,25 +1,16 @@
 import logging
-from typing import Optional, TypedDict
+from typing import Optional
 
 from common.utils.custom_fields import HexCharField
 from common.utils.telemetry_client import TelemetryServiceClient
-from django.core.cache import cache
+from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from rest_framework import serializers
 
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
-from apps.device_model.serializers import DeviceModelSerializer
 from apps.network_server.serializers import NetworkServerSerializer
 
 logger = logging.getLogger(__name__)
-
-
-class Checkpoint(TypedDict):
-    """A checkpoint with timestamp and coordinates"""
-
-    timestamp: str
-    latitude: float
-    longitude: float
 
 
 class LorawanDeviceSerializer(serializers.ModelSerializer):
@@ -53,17 +44,15 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 
 class FormatDeviceSerializer(serializers.ModelSerializer):
     device_id = serializers.UUIDField(read_only=True, source="lorawan_device.id")
-    device_profile = DeviceModelSerializer(read_only=True, source="device_model")
     space_slug = serializers.CharField()
 
     class Meta:
         model = Device
-        fields = ["id", "device_profile", "device_id", "space_slug", "is_published"]
+        fields = ["id", "device_id", "device_model", "space_slug", "is_published"]
 
 
 class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
-    device_profile = DeviceModelSerializer(read_only=True, source="device_model")
 
     class Meta:
         model = Device
@@ -71,12 +60,26 @@ class DeviceSerializer(serializers.ModelSerializer):
             "id",
             "network_server",
             "device_model",
-            "device_profile",
             "status",
             "lorawan_device",
             "is_published",
         ]
         list_serializer_class = MultiDeviceSerializer
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        device_profile = None
+        if instance.device_model:
+            try:
+                client = TranformerServiceClient()
+                device_profile = client.get_device_model(str(instance.device_model))
+            except Exception as e:
+                logger.error(
+                    f"Failed to fetch device model for {instance.id}: {str(e)}",
+                    exc_info=True,
+                )
+        data["device_profile"] = device_profile
+        return data
 
     def create(self, validated_data):
         lorawan_data = validated_data.pop("lorawan_device", None)
@@ -127,23 +130,11 @@ class DeviceSerializer(serializers.ModelSerializer):
                 )
                 raise
 
-        request = self.context.get("request")
-        org = request.headers.get("X-Organization")
-        dev_eui = getattr(getattr(instance, "lorawan_device", None), "dev_eui", None)
-        if org and dev_eui:
-            cache_key = f"{org}:lorawan:{dev_eui}"
-            try:
-                cache.delete(cache_key)
-                logger.debug(f"Deleted device cache key: {cache_key}")
-            except Exception as e:
-                logger.warning(f"Failed to delete cache key {cache_key}: {str(e)}")
-
         return instance
 
 
 class GetDeviceSerializer(DeviceSerializer):
     network_server = NetworkServerSerializer(read_only=True)
-    device_model = DeviceModelSerializer(read_only=True)
 
     class Meta(DeviceSerializer.Meta):
         model = Device
@@ -244,14 +235,3 @@ class TripDetailSerializer(TripListSerializer):
 
     class Meta(TripListSerializer.Meta):
         fields = TripListSerializer.Meta.fields + ["checkpoints"]
-
-
-class TripAnalysisSerializer(serializers.Serializer):
-    """Serializer for trip analysis results with telemetry data"""
-
-    id = serializers.UUIDField(read_only=True)
-    space_device_id = serializers.UUIDField(read_only=True)
-    started_at = serializers.DateTimeField(read_only=True)
-    is_finished = serializers.BooleanField(read_only=True)
-    locations = serializers.ListField(child=serializers.DictField(), read_only=True)
-    location_count = serializers.IntegerField(read_only=True)

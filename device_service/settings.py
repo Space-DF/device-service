@@ -27,6 +27,10 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from pathlib import Path
 
+# GEOS and GDAL library path (needed for Django GIS on Alpine Linux)
+GEOS_LIBRARY_PATH = os.getenv("GEOS_LIBRARY_PATH")
+GDAL_LIBRARY_PATH = os.getenv("GDAL_LIBRARY_PATH")
+
 # Basic settings
 SERVICE_NAME = "device"
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,6 +46,7 @@ DEFAULT_TENANT_HOST = os.getenv("DEFAULT_TENANT_HOST", "localhost")
 SHARED_APPS = [
     "django_tenants",
     "django.contrib.contenttypes",
+    "django.contrib.gis",
     "django.contrib.sessions",
     "django.contrib.messages",
     "whitenoise.runserver_nostatic",
@@ -56,7 +61,6 @@ SHARED_APPS = [
 TENANT_APPS = [
     "django.contrib.auth",
     "common.apps.space",
-    "apps.device_model",
     "apps.device",
     "apps.device_connector",
     "apps.network_server",
@@ -100,7 +104,7 @@ TEMPLATES = [
 # Database
 DATABASES = {
     "default": {
-        "ENGINE": "django_tenants.postgresql_backend",
+        "ENGINE": "device_service.db_backend",
         "NAME": os.getenv("DB_NAME", "spacedf_device_service"),
         "USER": os.getenv("DB_USERNAME", "postgres"),
         "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
@@ -175,6 +179,11 @@ EMQX_HOST = os.getenv("EMQX_HOST", "http://emqx:18083/api/v5")
 
 # Telemetry Service Configuration
 TELEMETRY_SERVICE_URL = os.getenv("TELEMETRY_SERVICE_URL", "http://telemetry:8080")
+
+# Transformer Service Configuration
+TRANSFORMER_SERVICE_URL = os.getenv(
+    "TRANSFORMER_SERVICE_URL", "http://transformer:8080"
+)
 
 # Redis cache
 CACHES = {

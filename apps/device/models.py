@@ -1,10 +1,10 @@
 import uuid
 
 from common.apps.space.models import BaseModel, Space
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 
 from apps.device.constants import DeviceStatus
-from apps.device_model.models import DeviceModel
 from apps.network_server.models import NetworkServer
 
 
@@ -17,9 +17,7 @@ class Device(BaseModel):
         blank=True,
         null=True,
     )
-    device_model = models.ForeignKey(
-        DeviceModel, related_name="devices", on_delete=models.CASCADE
-    )
+    device_model = models.UUIDField(null=True, blank=True)
     status = models.CharField(
         choices=DeviceStatus.choices, default=DeviceStatus.IN_INVENTORY
     )
@@ -46,6 +44,12 @@ class SpaceDevice(BaseModel):
     )
     device = models.ForeignKey(
         Device, related_name="space_devices", on_delete=models.CASCADE
+    )
+    location = gis_models.PointField(
+        geography=True,
+        srid=4326,
+        null=True,
+        blank=True,
     )
 
     class Meta:
