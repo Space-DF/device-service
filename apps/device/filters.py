@@ -1,5 +1,5 @@
 import django_filters
-from django.contrib.gis.geos import Polygon
+from django.db.models import Q
 
 from apps.device.models import SpaceDevice
 
@@ -19,7 +19,10 @@ class SpaceDeviceFilter(django_filters.FilterSet):
                 "Invalid bbox format. Expected format: west,south,east,north"
             )
 
-        bounding_box = Polygon(
-            [(west, south), (west, north), (east, north), (east, south), (west, south)]
+        return queryset.filter(
+            Q(location__isnull=False),
+            Q(location__longitude__gte=west),
+            Q(location__longitude__lte=east),
+            Q(location__latitude__gte=south),
+            Q(location__latitude__lte=north),
         )
-        return queryset.filter(location__within=bounding_box)
