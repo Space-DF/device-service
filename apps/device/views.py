@@ -38,7 +38,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     queryset = Device.objects.select_related("lorawan_device").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
-    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
 
@@ -71,8 +71,9 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
-    filter_backends = [SearchFilter, DjangoFilterBackend]
+    filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     filterset_class = SpaceDeviceFilter
+    ordering = ["-created_at"]
     space_field = "space"
     search_fields = [
         "name",
