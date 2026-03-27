@@ -43,8 +43,7 @@ def handle_device_space_delete(sender, instance, **kwargs):
     )
     tenant = connection.get_tenant()
     slug_name = getattr(tenant, "slug_name", connection.schema_name)
-    lorawan_obj = getattr(instance.device, "lorawan_device", None)
-    dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
+    dev_eui = getattr(getattr(instance.device, "lorawan_device", None), "dev_eui", None)
 
     clear_lorawan_cache(slug_name, dev_eui)
 
