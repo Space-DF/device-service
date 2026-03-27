@@ -80,9 +80,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     search_fields = [
         "name",
         "description",
-        "id",
         "device__lorawan_device__dev_eui",
-        "device__id",
         "device__device_model",
     ]
 

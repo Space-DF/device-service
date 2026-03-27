@@ -6,10 +6,11 @@ from apps.device.models import SpaceDevice
 
 class SpaceDeviceFilter(django_filters.FilterSet):
     bbox = django_filters.CharFilter(method="filter_bbox")
+    device_id = django_filters.CharFilter(field_name="device__id")
 
     class Meta:
         model = SpaceDevice
-        fields = ["bbox"]
+        fields = ["bbox", "device_id"]
 
     def filter_bbox(self, queryset, name, value):
         try:
