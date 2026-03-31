@@ -20,7 +20,7 @@ router.register("trips", TripViewSet, basename="trip")
 urlpatterns = [
     path("", include(router.urls)),
     path(
-        "device-spaces/<str:device_id>/internal",
+        "device-spaces/<uuid:device_id>/internal",
         SpaceDeviceLookupView.as_view(),
         name="device_spaces_lookup",
     ),

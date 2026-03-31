@@ -269,10 +269,10 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
     serializer_class = FormatSpaceDeviceSerializer
-    queryset = SpaceDevice.objects.select_related("device").all()
+    queryset = SpaceDevice.objects.all()
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())
         device_id = self.kwargs["device_id"]
 
-        return get_object_or_404(queryset, device__id=device_id)
+        return get_object_or_404(queryset, device_id=device_id)
