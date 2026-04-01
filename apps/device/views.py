@@ -23,6 +23,7 @@ from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
     FormatDeviceSerializer,
+    FormatSpaceDeviceSerializer,
     GetDeviceSerializer,
     SpaceDeviceSerializer,
     TripDetailSerializer,
@@ -264,3 +265,14 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
             self.get_queryset(),
             lorawan_device__dev_eui=dev_eui,
         )
+
+
+class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    serializer_class = FormatSpaceDeviceSerializer
+    queryset = SpaceDevice.objects.all()
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        device_id = self.kwargs["device_id"]
+
+        return get_object_or_404(queryset, device_id=device_id)

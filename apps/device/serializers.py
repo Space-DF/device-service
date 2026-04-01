@@ -198,6 +198,12 @@ class UpdateSpaceDeviceSerializer(serializers.ModelSerializer):
         fields = ["name", "description"]
 
 
+class FormatSpaceDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpaceDevice
+        fields = ["id", "name", "description"]
+
+
 class CheckpointSerializer(serializers.Serializer):
     """Serializer for location checkpoints from telemetry service"""
 

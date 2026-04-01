@@ -7,6 +7,7 @@ from apps.device.views import (
     DeviceViewSet,
     FindDeviceByCodeView,
     ListCreateSpaceDeviceViewSet,
+    SpaceDeviceLookupView,
     TripViewSet,
 )
 
@@ -18,6 +19,11 @@ router.register("trips", TripViewSet, basename="trip")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path(
+        "device-spaces/<uuid:device_id>/internal",
+        SpaceDeviceLookupView.as_view(),
+        name="device_spaces_lookup",
+    ),
     path("device-spaces", ListCreateSpaceDeviceViewSet.as_view(), name="device_spaces"),
     path(
         "device-spaces/<str:id>",
