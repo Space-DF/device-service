@@ -23,6 +23,7 @@ from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
     FormatDeviceSerializer,
+    FormatSpaceDeviceSerializer,
     GetDeviceSerializer,
     SpaceDeviceSerializer,
     TripDetailSerializer,
@@ -39,6 +40,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
 
@@ -71,15 +73,15 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
-    filter_backends = [SearchFilter, DjangoFilterBackend]
+    filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     filterset_class = SpaceDeviceFilter
+    ordering_fields = ["created_at", "name"]
+    ordering = ["-created_at"]
     space_field = "space"
     search_fields = [
         "name",
         "description",
-        "id",
         "device__lorawan_device__dev_eui",
-        "device__id",
         "device__device_model",
     ]
 
@@ -263,3 +265,14 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
             self.get_queryset(),
             lorawan_device__dev_eui=dev_eui,
         )
+
+
+class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    serializer_class = FormatSpaceDeviceSerializer
+    queryset = SpaceDevice.objects.all()
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        device_id = self.kwargs["device_id"]
+
+        return get_object_or_404(queryset, device_id=device_id)

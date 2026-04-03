@@ -27,10 +27,6 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from pathlib import Path
 
-# GEOS and GDAL library path (needed for Django GIS on Alpine Linux)
-GEOS_LIBRARY_PATH = os.getenv("GEOS_LIBRARY_PATH")
-GDAL_LIBRARY_PATH = os.getenv("GDAL_LIBRARY_PATH")
-
 # Basic settings
 SERVICE_NAME = "device"
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -46,7 +42,6 @@ DEFAULT_TENANT_HOST = os.getenv("DEFAULT_TENANT_HOST", "localhost")
 SHARED_APPS = [
     "django_tenants",
     "django.contrib.contenttypes",
-    "django.contrib.gis",
     "django.contrib.sessions",
     "django.contrib.messages",
     "whitenoise.runserver_nostatic",
@@ -104,7 +99,7 @@ TEMPLATES = [
 # Database
 DATABASES = {
     "default": {
-        "ENGINE": "device_service.db_backend",
+        "ENGINE": "django_tenants.postgresql_backend",
         "NAME": os.getenv("DB_NAME", "spacedf_device_service"),
         "USER": os.getenv("DB_USERNAME", "postgres"),
         "PASSWORD": os.getenv("DB_PASSWORD", "postgres"),
