@@ -7,8 +7,14 @@ from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.building.models import Area, Floor
+from apps.building.serializers import AreaSerializer, FloorSerializer
+from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.facility.models import Facility
+from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
+from apps.placement.serializers import PositionSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +149,36 @@ class GetDeviceSerializer(DeviceSerializer):
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
+    facility = FacilitySerializer(read_only=True)
+    floor = FloorSerializer(read_only=True)
+    area = AreaSerializer(read_only=True)
+    position = PositionSerializer(read_only=True)
 
     class Meta:
         model = SpaceDevice
-        fields = ["id", "name", "description", "device"]
+        fields = [
+            "id",
+            "name",
+            "description",
+            "device",
+            "facility",
+            "floor",
+            "area",
+            "position",
+        ]
+
+    def validate(self, data):
+        provided_fields = [
+            field
+            for field in [data.get("facility"), data.get("floor"), data.get("area")]
+            if field is not None
+        ]
+
+        if len(provided_fields) not in [0, 1]:
+            raise serializers.ValidationError(
+                "Exactly one of facility, floor, area must be provided."
+            )
+        return data
 
     def to_representation(self, instance: SpaceDevice):
         """Override to fetch device_properties from telemetry service"""
@@ -184,18 +216,103 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return None
 
 
-class CreateSpaceDeviceSerializer(serializers.ModelSerializer):
+class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
     dev_eui = serializers.CharField(max_length=16, write_only=True)
+    facility = serializers.PrimaryKeyRelatedField(
+        queryset=Facility.objects.all(), required=False, allow_null=True
+    )
+    floor = serializers.PrimaryKeyRelatedField(
+        queryset=Floor.objects.all(), required=False, allow_null=True
+    )
+    area = serializers.PrimaryKeyRelatedField(
+        queryset=Area.objects.all(), required=False, allow_null=True
+    )
+    position = PositionSerializer(required=False, allow_null=True)
 
     class Meta:
         model = SpaceDevice
-        fields = ["name", "description", "dev_eui"]
+        fields = [
+            "name",
+            "description",
+            "dev_eui",
+            "facility",
+            "floor",
+            "area",
+            "position",
+        ]
+
+    @transaction.atomic
+    def create(self, validated_data):
+        dev_eui = validated_data.pop("dev_eui").lower()
+        position_data = validated_data.pop("position", None)
+        device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
+
+        if not device:
+            raise serializers.ValidationError(
+                f"Device with dev_eui = {dev_eui} not in the organization"
+            )
+
+        if device.status == DeviceStatus.ACTIVE:
+            raise serializers.ValidationError(
+                f"Device with dev_eui = {dev_eui} not in the inventory"
+            )
+
+        device.status = DeviceStatus.ACTIVE
+        device.save()
+
+        space_device = SpaceDevice.objects.create(device=device, **validated_data)
+        if position_data:
+            position_serializer = PositionSerializer(data=position_data)
+            position_serializer.is_valid(raise_exception=True)
+            space_device.position = position_serializer.save()
+            space_device.save(update_fields=["position"])
+
+        return space_device
 
 
-class UpdateSpaceDeviceSerializer(serializers.ModelSerializer):
+class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
+    facility = serializers.PrimaryKeyRelatedField(
+        queryset=Facility.objects.all(), required=False, allow_null=True
+    )
+    floor = serializers.PrimaryKeyRelatedField(
+        queryset=Floor.objects.all(), required=False, allow_null=True
+    )
+    area = serializers.PrimaryKeyRelatedField(
+        queryset=Area.objects.all(), required=False, allow_null=True
+    )
+    position = PositionSerializer(required=False, allow_null=True)
+
     class Meta:
         model = SpaceDevice
-        fields = ["name", "description"]
+        fields = [
+            "name",
+            "description",
+            "facility",
+            "floor",
+            "area",
+            "position",
+        ]
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        position_data = validated_data.pop("position", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if position_data is not None:
+            if instance.position:
+                position_serializer = PositionSerializer(
+                    instance.position, data=position_data, partial=True
+                )
+            else:
+                position_serializer = PositionSerializer(data=position_data)
+
+            position_serializer.is_valid(raise_exception=True)
+            instance.position = position_serializer.save()
+
+        instance.save()
+        return instance
 
 
 class FormatSpaceDeviceSerializer(serializers.ModelSerializer):
