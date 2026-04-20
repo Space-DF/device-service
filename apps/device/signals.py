@@ -96,6 +96,6 @@ def handle_device_update(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=SpaceDevice)
 def handle_space_device_delete(sender, instance, **kwargs):
     try:
-        Position.objects.delete(id=instance.position.id)
+        Position.objects.filter(id=instance.position_id).delete()
     except Exception as e:
         logger.error(f"Failed to delete Position: {str(e)}")

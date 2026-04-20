@@ -82,8 +82,4 @@ class Migration(migrations.Migration):
                 fields=["device"], name="device__spa_device__434ba1_idx"
             ),
         ),
-        migrations.AlterModelTable(
-            name="spacedevice",
-            table="device__space_device",
-        ),
     ]

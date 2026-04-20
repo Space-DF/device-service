@@ -260,12 +260,12 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
         device.status = DeviceStatus.ACTIVE
         device.save()
 
-        space_device = SpaceDevice.objects.create(device=device, **validated_data)
         if position_data:
             position_serializer = PositionSerializer(data=position_data)
             position_serializer.is_valid(raise_exception=True)
-            space_device.position = position_serializer.save()
-            space_device.save(update_fields=["position"])
+            validated_data["position"] = position_serializer.save()
+
+        space_device = SpaceDevice.objects.create(device=device, **validated_data)
 
         return space_device
 
@@ -295,21 +295,29 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        has_position = "position" in validated_data
         position_data = validated_data.pop("position", None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        if position_data is not None:
-            if instance.position:
-                position_serializer = PositionSerializer(
-                    instance.position, data=position_data, partial=True
-                )
-            else:
-                position_serializer = PositionSerializer(data=position_data)
+        if not has_position:
+            instance.save()
+            return instance
 
-            position_serializer.is_valid(raise_exception=True)
-            instance.position = position_serializer.save()
+        if position_data is None:
+            instance.position = None
+            instance.save()
+            return instance
+
+        serializer = (
+            PositionSerializer(instance.position, data=position_data, partial=True)
+            if instance.position
+            else PositionSerializer(data=position_data)
+        )
+
+        serializer.is_valid(raise_exception=True)
+        instance.position = serializer.save()
 
         instance.save()
         return instance
