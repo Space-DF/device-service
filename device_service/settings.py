@@ -59,6 +59,9 @@ TENANT_APPS = [
     "apps.device",
     "apps.device_connector",
     "apps.network_server",
+    "apps.building",
+    "apps.facility",
+    "apps.placement",
 ]
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -106,6 +109,13 @@ DATABASES = {
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", 25060),
     }
+}
+# AWS S3 Storage settings
+AWS_S3 = {
+    "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID", ""),  # noqa
+    "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY", ""),  # noqa
+    "AWS_STORAGE_BUCKET_NAME": os.getenv("AWS_STORAGE_BUCKET_NAME", ""),  # noqa
+    "AWS_REGION": os.getenv("AWS_REGION", ""),  # noqa
 }
 
 # Internationalization

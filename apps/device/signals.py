@@ -1,15 +1,20 @@
+import logging
+
 from common.apps.space.models import Space
 from common.celery import constants
 from common.celery.task_senders import send_task
 from django.db import connection
 from django.db.models import F, Value
 from django.db.models.functions import Greatest
-from django.db.models.signals import post_save, pre_delete
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, SpaceDevice
 from apps.device.services.lorawan_cache_service import clear_lorawan_cache
+from apps.placement.models import Position
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=SpaceDevice)
@@ -86,3 +91,11 @@ def handle_device_update(sender, instance, created, **kwargs):
     dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
 
     clear_lorawan_cache(slug_name, dev_eui)
+
+
+@receiver(post_delete, sender=SpaceDevice)
+def handle_space_device_delete(sender, instance, **kwargs):
+    try:
+        Position.objects.filter(id=instance.position_id).delete()
+    except Exception as e:
+        logger.error(f"Failed to delete Position: {str(e)}")

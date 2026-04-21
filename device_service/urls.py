@@ -43,4 +43,6 @@ urlpatterns = [
     # apis
     path("api/", include("apps.network_server.urls", namespace="network_server")),
     path("api/", include("apps.device.urls", namespace="device")),
+    path("api/", include("apps.building.urls", namespace="building")),
+    path("api/", include("apps.facility.urls", namespace="facility")),
 ]

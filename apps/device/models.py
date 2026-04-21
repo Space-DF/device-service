@@ -3,8 +3,11 @@ import uuid
 from common.apps.space.models import BaseModel, Space
 from django.db import models
 
+from apps.building.models import Area, Floor
 from apps.device.constants import DeviceStatus
+from apps.facility.models import Facility
 from apps.network_server.models import NetworkServer
+from apps.placement.models import Position
 
 
 class Device(BaseModel):
@@ -44,6 +47,34 @@ class SpaceDevice(BaseModel):
     device = models.ForeignKey(
         Device, related_name="space_devices", on_delete=models.CASCADE
     )
+    facility = models.ForeignKey(
+        Facility,
+        related_name="facility_devices",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    floor = models.ForeignKey(
+        Floor,
+        related_name="floor_devices",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    area = models.ForeignKey(
+        Area,
+        related_name="area_devices",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    position = models.ForeignKey(
+        Position,
+        related_name="position_devices",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
     location = models.JSONField(
         null=True,
         blank=True,
@@ -51,8 +82,11 @@ class SpaceDevice(BaseModel):
     )
 
     class Meta:
+        ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["name"]),
+            models.Index(fields=["space"]),
+            models.Index(fields=["device"]),
         ]
 
 
