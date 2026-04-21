@@ -48,12 +48,6 @@ class FloorRetrieveUpdateDestroyView(SpaceRetrieveUpdateDestroyAPIView):
     queryset = Floor.objects.select_related("building").all()
     serializer_class = FloorSerializer
     space_field = "building__space"
-    lookup_url_kwarg = "floor_id"
-
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return super().get_queryset()
-        return super().get_queryset().filter(building_id=self.kwargs["building_id"])
 
 
 class AreaListCreateView(SpaceListCreateAPIView):
@@ -84,8 +78,3 @@ class AreaRetrieveUpdateDestroyView(SpaceRetrieveUpdateDestroyAPIView):
     queryset = Area.objects.select_related("floor", "floor__building").all()
     serializer_class = AreaSerializer
     space_field = "floor__building__space"
-
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return super().get_queryset()
-        return super().get_queryset().filter(floor_id=self.kwargs["floor_id"])

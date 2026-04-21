@@ -18,7 +18,7 @@ urlpatterns = [
         name="area-list-create",
     ),
     path(
-        "floors/<uuid:floor_id>/areas/<uuid:pk>",
+        "areas/<uuid:pk>",
         AreaRetrieveUpdateDestroyView.as_view(),
         name="area-detail",
     ),
@@ -28,7 +28,7 @@ urlpatterns = [
         name="floor-list-create",
     ),
     path(
-        "buildings/<uuid:building_id>/floors/<uuid:floor_id>",
+        "floors/<uuid:pk>",
         FloorRetrieveUpdateDestroyView.as_view(),
         name="floor-detail",
     ),
