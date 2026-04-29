@@ -97,6 +97,11 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
 
         space_slug = request.headers.get("X-Space", None)
         space = Space.objects.filter(slug_name=space_slug).first()
+        if not space:
+            return Response(
+                {"detail": f"Space with slug '{space_slug}' not found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         dev_eui = serializer.validated_data.pop("dev_eui").lower()
         device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
