@@ -2,7 +2,7 @@ import logging
 
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
-from common.views.space import SpaceListCreateAPIView
+from common.views.space import SpaceListCreateAPIView, SpaceRetrieveAPIView
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -248,3 +248,18 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         device_id = self.kwargs["device_id"]
 
         return get_object_or_404(queryset, device_id=device_id)
+
+
+class RetrieveSpaceDeviceView(SpaceRetrieveAPIView):
+    serializer_class = SpaceDeviceSerializer
+    lookup_field = "device_id"
+    space_field = "space"
+    queryset = SpaceDevice.objects.select_related(
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "space",
+    ).all()
