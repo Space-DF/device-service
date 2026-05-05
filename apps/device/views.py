@@ -216,6 +216,7 @@ class TripViewSet(
 
 
 class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatDeviceSerializer
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
         "space_devices"
@@ -240,6 +241,7 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
 
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatSpaceDeviceSerializer
     queryset = SpaceDevice.objects.all()
 
@@ -248,3 +250,17 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         device_id = self.kwargs["device_id"]
 
         return get_object_or_404(queryset, device_id=device_id)
+
+
+class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
+    serializer_class = SpaceDeviceSerializer
+    lookup_field = "device_id"
+    queryset = SpaceDevice.objects.select_related(
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "space",
+    ).all()
