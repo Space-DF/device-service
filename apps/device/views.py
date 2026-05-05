@@ -2,7 +2,7 @@ import logging
 
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
-from common.views.space import SpaceListCreateAPIView, SpaceRetrieveAPIView
+from common.views.space import SpaceListCreateAPIView
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -216,6 +216,7 @@ class TripViewSet(
 
 
 class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatDeviceSerializer
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
         "space_devices"
@@ -240,6 +241,7 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
 
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatSpaceDeviceSerializer
     queryset = SpaceDevice.objects.all()
 
@@ -250,10 +252,9 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         return get_object_or_404(queryset, device_id=device_id)
 
 
-class RetrieveSpaceDeviceView(SpaceRetrieveAPIView):
+class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
     serializer_class = SpaceDeviceSerializer
     lookup_field = "device_id"
-    space_field = "space"
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
