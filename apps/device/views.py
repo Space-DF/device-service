@@ -54,14 +54,32 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["post"], url_path="bulk-create")
     def create_multi_device(self, request):
-        serializer = DeviceSerializer(
-            data=request.data, many=True, context=self.get_serializer_context()
+        serializer = self.get_serializer(
+            data=request.data,
+            many=True,
+            context=self.get_serializer_context(),
         )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        devices = serializer.save()
+
+        serializer.is_valid(raise_exception=False)
+        created_devices = serializer.save()
+
+        failed_data = getattr(serializer, "_failed_data", [])
+        duplicate_count = sum(
+            1 for item in failed_data if item.get("reason", "").startswith("duplicate_")
+        )
+        validation_error_count = sum(
+            1 for item in failed_data if item.get("reason") == "validation_error"
+        )
+
         return Response(
-            DeviceSerializer(devices, many=True).data, status=status.HTTP_201_CREATED
+            {
+                "total_created": len(created_devices),
+                "total_failed": len(failed_data),
+                "duplicate_count": duplicate_count,
+                "validation_error_count": validation_error_count,
+                "failed_devices": failed_data,
+            },
+            status=status.HTTP_201_CREATED,
         )
 
 
