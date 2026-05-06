@@ -15,6 +15,11 @@ class Building(BaseModel):
         blank=True,
         help_text='Location as JSON: {"latitude": <float>, "longitude": <float>}',
     )
+    scene_asset = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+    )
     description = models.TextField(null=True, blank=True)
 
     class Meta:
