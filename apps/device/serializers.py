@@ -9,6 +9,13 @@ from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from apps.building.models import Area, Building, Floor
+from apps.building.serializers import (
+    AreaSerializer,
+    BuildingSerializer,
+    FloorSerializer,
+)
+from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
 from apps.network_server.serializers import NetworkServerSerializer
 from apps.placement.serializers import PositionSerializer
@@ -235,6 +242,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
     facility = FacilitySerializer(read_only=True)
     floor = FloorSerializer(read_only=True)
+    building = BuildingSerializer(read_only=True)
     area = AreaSerializer(read_only=True)
     position = PositionSerializer(read_only=True)
 
@@ -246,6 +254,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             "description",
             "device",
             "facility",
+            "building",
             "floor",
             "area",
             "position",
@@ -254,13 +263,18 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
     def validate(self, data):
         provided_fields = [
             field
-            for field in [data.get("facility"), data.get("floor"), data.get("area")]
+            for field in [
+                data.get("facility"),
+                data.get("floor"),
+                data.get("area"),
+                data.get("building"),
+            ]
             if field is not None
         ]
 
         if len(provided_fields) not in [0, 1]:
             raise serializers.ValidationError(
-                "Exactly one of facility, floor, area must be provided."
+                "Exactly one of facility, floor, area, building must be provided."
             )
         return data
 
@@ -302,6 +316,9 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
     dev_eui = serializers.CharField(max_length=16, write_only=True)
+    building = serializers.PrimaryKeyRelatedField(
+        queryset=Building.objects.all(), required=False, allow_null=True
+    )
     facility = serializers.PrimaryKeyRelatedField(
         queryset=Facility.objects.all(), required=False, allow_null=True
     )
@@ -319,6 +336,7 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
             "name",
             "description",
             "dev_eui",
+            "building",
             "facility",
             "floor",
             "area",
@@ -357,6 +375,9 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
 class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
     facility = serializers.PrimaryKeyRelatedField(
         queryset=Facility.objects.all(), required=False, allow_null=True
+    )
+    building = serializers.PrimaryKeyRelatedField(
+        queryset=Building.objects.all(), required=False, allow_null=True
     )
     floor = serializers.PrimaryKeyRelatedField(
         queryset=Floor.objects.all(), required=False, allow_null=True
