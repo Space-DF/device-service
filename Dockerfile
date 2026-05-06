@@ -13,7 +13,7 @@ WORKDIR /install
 # install private repo
 RUN --mount=type=secret,id=github_token \
     pip install --no-cache-dir --prefix=/install \
-    git+https://$(cat /run/secrets/github_token)@github.com/Space-DF/django-common-utils.git@feat/add-template-field-for-organization-model 
+    git+https://$(cat /run/secrets/github_token)@github.com/Space-DF/django-common-utils.git@dev
 
 # install python requirements
 COPY requirements.txt .
