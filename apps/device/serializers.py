@@ -7,6 +7,7 @@ from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from django.db.models import Q
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
 from apps.network_server.serializers import NetworkServerSerializer
@@ -26,65 +27,69 @@ class LorawanDeviceSerializer(serializers.ModelSerializer):
 
 
 class MultiDeviceSerializer(serializers.ListSerializer):
-    DUPLICATE_FIELDS = ["dev_eui", "join_eui", "app_key"]
+    DUPLICATE_FIELDS = ["dev_eui"]
 
     def to_internal_value(self, data):
         existing = self._fetch_existing(data)
         seen = {f: set() for f in self.DUPLICATE_FIELDS}
         valid_items = []
-        self._failed_data = []
+        duplicates = []
+        errors = []
 
         for index, item in enumerate(data):
             lorawan = item.get("lorawan_device", {})
 
-            failed = self._find_duplicate(lorawan, existing, seen, index)
-            if failed:
-                self._failed_data.append(failed)
+            dup = self._find_duplicate(lorawan, existing, seen)
+            if dup:
+                duplicates.append(dup)
                 continue
 
             child = self.child.__class__(context=self.context, data=item)
+            self._strip_unique_validators(child)
             if child.is_valid():
                 valid_items.append(child.validated_data)
                 for f in self.DUPLICATE_FIELDS:
                     if v := lorawan.get(f):
                         seen[f].add(v)
             else:
-                self._failed_data.append({
-                    "dev_eui": lorawan.get("dev_eui") or f"row_{index}",
-                    "reason": "validation_error",
-                    "message": f"Validation failed at row {index}",
-                    "errors": child.errors,
-                })
+                errors.append({"row": index, "errors": child.errors})
 
-        self._validated_data = valid_items
+        self._failed_data = {
+            "duplicates": duplicates,
+            "validation_errors": errors,
+        }
         return valid_items
 
-    def _find_duplicate(self, lorawan, existing, seen, index):
+    def _find_duplicate(self, lorawan, existing, seen):
         for field in self.DUPLICATE_FIELDS:
             value = lorawan.get(field)
             if not value:
                 continue
 
-            label = field.replace("_", " ")
-
             if value in existing.get(field, set()):
-                return {
-                    "dev_eui": lorawan.get("dev_eui") or value,
-                    "reason": f"duplicate_{field}",
-                    "message": f"{label} {value} already exists in the system",
-                }
+                return lorawan.get("dev_eui") or value
 
             if value in seen[field]:
-                return {
-                    "dev_eui": lorawan.get("dev_eui") or value,
-                    "reason": f"duplicate_{field}_batch",
-                    "message": f"{label} {value} is duplicated in the import batch",
-                }
+                return lorawan.get("dev_eui") or value
 
         return None
 
+    def _strip_unique_validators(self, child):
+        lorawan = child.fields.get("lorawan_device")
+        if not lorawan:
+            return
+        for field in lorawan.fields.values():
+            field.validators = [
+                v for v in field.validators
+                if not isinstance(v, UniqueValidator)
+            ]
+
     def _fetch_existing(self, data):
-        lorawan_list = [item.get("lorawan_device", {}) for item in data if item.get("lorawan_device")]
+        lorawan_list = [
+            item.get("lorawan_device", {})
+            for item in data
+            if item.get("lorawan_device")
+        ]
 
         field_values = {
             f: list(filter(None, (d.get(f) for d in lorawan_list)))
@@ -100,7 +105,9 @@ class MultiDeviceSerializer(serializers.ListSerializer):
             return {f: set() for f in self.DUPLICATE_FIELDS}
 
         existing = {f: set() for f in self.DUPLICATE_FIELDS}
-        for row in LorawanDevice.objects.filter(filters).values_list(*self.DUPLICATE_FIELDS):
+        for row in LorawanDevice.objects.filter(filters).values_list(
+            *self.DUPLICATE_FIELDS
+        ):
             for f, val in zip(self.DUPLICATE_FIELDS, row):
                 if val:
                     existing[f].add(val)
