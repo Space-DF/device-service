@@ -5,9 +5,7 @@ from common.utils.custom_fields import HexCharField
 from common.utils.telemetry_client import TelemetryServiceClient
 from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
-from django.db.models import Q
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
 
 from apps.building.models import Area, Building, Floor
 from apps.building.serializers import (
@@ -17,6 +15,8 @@ from apps.building.serializers import (
 )
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.facility.models import Facility
+from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
 from apps.placement.serializers import PositionSerializer
 
@@ -34,92 +34,55 @@ class LorawanDeviceSerializer(serializers.ModelSerializer):
 
 
 class MultiDeviceSerializer(serializers.ListSerializer):
-    DUPLICATE_FIELDS = ["dev_eui"]
-
     def to_internal_value(self, data):
-        existing = self._fetch_existing(data)
-        seen = {f: set() for f in self.DUPLICATE_FIELDS}
         valid_items = []
-        duplicates = []
-        errors = []
+        duplicated = []
+        validation_error = []
+        request_dev_euis = set()
 
-        for index, item in enumerate(data):
-            lorawan = item.get("lorawan_device", {})
+        existing_dev_euis = set(
+            LorawanDevice.objects.filter(
+                dev_eui__in=[
+                    item.get("lorawan_device", {}).get("dev_eui") for item in data
+                ]
+            ).values_list("dev_eui", flat=True)
+        )
 
-            dup = self._find_duplicate(lorawan, existing, seen)
-            if dup:
-                duplicates.append(dup)
+        for item in data:
+            lorawan_device = item.get("lorawan_device") or {}
+            dev_eui = lorawan_device.get("dev_eui")
+
+            if not dev_eui:
+                validation_error.append(dev_eui)
                 continue
 
-            child = self.child.__class__(context=self.context, data=item)
-            self._strip_unique_validators(child)
-            if child.is_valid():
-                valid_items.append(child.validated_data)
-                for f in self.DUPLICATE_FIELDS:
-                    if v := lorawan.get(f):
-                        seen[f].add(v)
-            else:
-                errors.append({"row": index, "errors": child.errors})
+            if dev_eui in request_dev_euis:
+                duplicated.append(dev_eui)
+                continue
 
+            request_dev_euis.add(dev_eui)
+            if dev_eui in existing_dev_euis:
+                duplicated.append(dev_eui)
+                continue
+
+            serializer = self.child.__class__(
+                data=item,
+                context=self.context,
+            )
+
+            if serializer.is_valid():
+                valid_items.append(serializer.validated_data)
+                continue
+
+            validation_error.append(dev_eui)
+
+        self._total_failed = len(duplicated) + len(validation_error)
         self._failed_data = {
-            "duplicates": duplicates,
-            "validation_errors": errors,
+            "duplicated": duplicated,
+            "validation_errors": validation_error,
         }
+
         return valid_items
-
-    def _find_duplicate(self, lorawan, existing, seen):
-        for field in self.DUPLICATE_FIELDS:
-            value = lorawan.get(field)
-            if not value:
-                continue
-
-            if value in existing.get(field, set()):
-                return lorawan.get("dev_eui") or value
-
-            if value in seen[field]:
-                return lorawan.get("dev_eui") or value
-
-        return None
-
-    def _strip_unique_validators(self, child):
-        lorawan = child.fields.get("lorawan_device")
-        if not lorawan:
-            return
-        for field in lorawan.fields.values():
-            field.validators = [
-                v for v in field.validators
-                if not isinstance(v, UniqueValidator)
-            ]
-
-    def _fetch_existing(self, data):
-        lorawan_list = [
-            item.get("lorawan_device", {})
-            for item in data
-            if item.get("lorawan_device")
-        ]
-
-        field_values = {
-            f: list(filter(None, (d.get(f) for d in lorawan_list)))
-            for f in self.DUPLICATE_FIELDS
-        }
-
-        filters = Q()
-        for f, vals in field_values.items():
-            if vals:
-                filters |= Q(**{f"{f}__in": vals})
-
-        if not filters:
-            return {f: set() for f in self.DUPLICATE_FIELDS}
-
-        existing = {f: set() for f in self.DUPLICATE_FIELDS}
-        for row in LorawanDevice.objects.filter(filters).values_list(
-            *self.DUPLICATE_FIELDS
-        ):
-            for f, val in zip(self.DUPLICATE_FIELDS, row):
-                if val:
-                    existing[f].add(val)
-
-        return existing
 
     @transaction.atomic
     def create(self, validated_data):

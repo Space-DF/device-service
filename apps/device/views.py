@@ -64,19 +64,12 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
         created_devices = serializer.save()
 
         failed_data = getattr(serializer, "_failed_data", [])
-        duplicate_count = sum(
-            1 for item in failed_data if item.get("reason", "").startswith("duplicate_")
-        )
-        validation_error_count = sum(
-            1 for item in failed_data if item.get("reason") == "validation_error"
-        )
+        total_failed = getattr(serializer, "_total_failed", 0)
 
         return Response(
             {
                 "total_created": len(created_devices),
-                "total_failed": len(failed_data),
-                "duplicate_count": duplicate_count,
-                "validation_error_count": validation_error_count,
+                "total_failed": total_failed,
                 "failed_devices": failed_data,
             },
             status=status.HTTP_201_CREATED,
