@@ -24,6 +24,56 @@ class LorawanDeviceSerializer(serializers.ModelSerializer):
 
 
 class MultiDeviceSerializer(serializers.ListSerializer):
+    def to_internal_value(self, data):
+        valid_items = []
+        duplicated = []
+        validation_error = []
+        request_dev_euis = set()
+
+        existing_dev_euis = set(
+            LorawanDevice.objects.filter(
+                dev_eui__in=[
+                    item.get("lorawan_device", {}).get("dev_eui") for item in data
+                ]
+            ).values_list("dev_eui", flat=True)
+        )
+
+        for item in data:
+            lorawan_device = item.get("lorawan_device") or {}
+            dev_eui = lorawan_device.get("dev_eui")
+
+            if not dev_eui:
+                validation_error.append(dev_eui)
+                continue
+
+            if dev_eui in request_dev_euis:
+                duplicated.append(dev_eui)
+                continue
+
+            request_dev_euis.add(dev_eui)
+            if dev_eui in existing_dev_euis:
+                duplicated.append(dev_eui)
+                continue
+
+            serializer = self.child.__class__(
+                data=item,
+                context=self.context,
+            )
+
+            if serializer.is_valid():
+                valid_items.append(serializer.validated_data)
+                continue
+
+            validation_error.append(dev_eui)
+
+        self._total_failed = len(duplicated) + len(validation_error)
+        self._failed_data = {
+            "duplicated": duplicated,
+            "validation_errors": validation_error,
+        }
+
+        return valid_items
+
     @transaction.atomic
     def create(self, validated_data):
         device_objs = []
