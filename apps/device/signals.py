@@ -24,6 +24,7 @@ def handle_device_space_create(sender, instance, created, **kwargs):
 
     tenant = connection.get_tenant()
     slug_name = getattr(tenant, "slug_name", connection.schema_name)
+    dev_eui = getattr(getattr(instance.device, "lorawan_device", None), "dev_eui", None)
     Space.objects.filter(slug_name=instance.space.slug_name).update(
         total_devices=F("total_devices") + 1
     )
@@ -36,6 +37,23 @@ def handle_device_space_create(sender, instance, created, **kwargs):
             "type": "add",
         },
     )
+
+    if instance.device.device_model and dev_eui:
+        send_task(
+            name="create_device_entities",
+            message={
+                "organization_slug_name": slug_name,
+                "space_slug": instance.space.slug_name,
+                "device_id": str(instance.device.id),
+                "device_model": str(instance.device.device_model),
+                "dev_eui": dev_eui,
+            },
+        )
+    else:
+        logger.warning(
+            "Skipping create_device_entities task for device %s: missing device_model or dev_eui",
+            instance.device.id,
+        )
 
 
 @receiver(pre_delete, sender=SpaceDevice)
