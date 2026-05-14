@@ -9,7 +9,14 @@ class SpaceDeviceFilter(django_filters.FilterSet):
 
     class Meta:
         model = SpaceDevice
-        fields = ["bbox", "device_id"]
+        fields = [
+            "bbox",
+            "device_id",
+            "building_id",
+            "floor_id",
+            "area_id",
+            "facility_id",
+        ]
 
     def filter_bbox(self, queryset, name, value):
         try:

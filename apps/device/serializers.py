@@ -1,4 +1,5 @@
 import logging
+from functools import cached_property
 from typing import Optional
 
 from common.utils.custom_fields import HexCharField
@@ -223,6 +224,16 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             "position",
         ]
 
+    @cached_property
+    def telemetry_client(self) -> TelemetryServiceClient:
+        return TelemetryServiceClient()
+
+    @cached_property
+    def organization_slug(self) -> str:
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None)
+        return getattr(tenant, "slug_name", "") or ""
+
     def validate(self, data):
         provided_fields = [
             field
@@ -242,39 +253,51 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         return data
 
     def to_representation(self, instance: SpaceDevice):
-        """Override to fetch device_properties from telemetry service"""
         data = super().to_representation(instance)
         data["device_properties"] = self._get_device_properties(instance)
+        data["entities"] = self._get_entities(instance)
         return data
 
+    def _get_telemetry_identifiers(self, obj: SpaceDevice) -> tuple[str, str]:
+        return str(obj.device.id), obj.space.slug_name
+
     def _get_device_properties(self, obj: SpaceDevice) -> Optional[dict]:
-        """Fetch all device properties from telemetry service"""
         try:
-            space_slug = obj.space.slug_name
-            device_id = str(obj.device.id)
-            logger.debug(
-                f"Fetching device properties for device {device_id} in space {space_slug}"
-            )
-
-            organization_slug = ""
-            request = self.context.get("request")
-            if request and hasattr(request, "tenant"):
-                organization_slug = request.tenant.slug_name
-
-            telemetry_client = TelemetryServiceClient()
-            device_props = telemetry_client.get_device_properties(
-                device_id, organization_slug, space_slug
+            device_id, space_slug = self._get_telemetry_identifiers(obj)
+            device_props = self.telemetry_client.get_device_properties(
+                device_id,
+                self.organization_slug,
+                space_slug,
             )
 
             logger.info(
-                f"Successfully fetched device properties for device {device_id}"
+                "Successfully fetched device properties for device %s", device_id
             )
             return device_props if device_props else None
-        except Exception as e:
-            logger.error(
-                f"Error fetching device properties for device {obj.device.id}: {str(e)}"
+        except Exception:
+            logger.exception(
+                "Error fetching device properties for device %s",
+                obj.device.id,
             )
             return None
+
+    def _get_entities(self, obj: SpaceDevice) -> list[dict]:
+        try:
+            device_id, space_slug = self._get_telemetry_identifiers(obj)
+            entities = self.telemetry_client.get_entities(
+                device_id,
+                self.organization_slug,
+                space_slug,
+            )
+
+            logger.info("Successfully fetched entities for device %s", device_id)
+            return entities if entities else []
+        except Exception:
+            logger.exception(
+                "Error fetching entities for device %s",
+                obj.device.id,
+            )
+            return []
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
@@ -355,6 +378,7 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
         fields = [
             "name",
             "description",
+            "building",
             "facility",
             "floor",
             "area",
