@@ -3,19 +3,19 @@ from apps.network_server.models import NetworkServer
 network_servers = [
     {
         "name": "TTN",
-        "logo": "https://avatars.githubusercontent.com/u/13333576",
+        "logo": "ttn.png",
         "description": "The Things Network",
         "connection_types": ["http_server", "mqtt_broker"],
     },
     {
         "name": "Chirpstack",
-        "logo": "https://www.chirpstack.de/assets/logo-blue.png",
+        "logo": "chirp_stack.png",
         "description": "Chirpstack",
         "connection_types": ["http_server"],
     },
     {
         "name": "Helium",
-        "logo": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Helium_Network_logo_%282025%29.png",
+        "logo": "helium.png",
         "description": "Helium",
         "connection_types": ["http_server"],
     },
