@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.device.views import (
+    BulkDeleteDeviceView,
     DeleteSpaceDeviceViewSet,
     DeviceLookupView,
     DeviceViewSet,
@@ -19,6 +20,11 @@ router.register("devices", DeviceViewSet)
 router.register("trips", TripViewSet, basename="trip")
 
 urlpatterns = [
+    path(
+        "devices/bulk-delete/",
+        BulkDeleteDeviceView.as_view(),
+        name="bulk_delete_devices",
+    ),
     path("", include(router.urls)),
     path(
         "device-spaces/<uuid:device_id>/internal",

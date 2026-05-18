@@ -3,6 +3,7 @@ import logging
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.space import SpaceListCreateAPIView
+from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -28,6 +29,7 @@ from apps.device.serializers import (
     TripListSerializer,
     UpdateSpaceDeviceSerializer,
 )
+from apps.device.services.query_params import parse_uuid_query_param
 from apps.device.services.trip_analyzer import TripAnalyzerService
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,54 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class BulkDeleteDeviceView(UseTenantFromRequestMixin, generics.GenericAPIView):
+    serializer_class = DeviceSerializer
+    queryset = Device.objects.all()
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                "all",
+                openapi.IN_QUERY,
+                description="true = delete everything within queryset (according to org) except exclude_ids",
+                type=openapi.TYPE_BOOLEAN,
+                required=False,
+            ),
+            openapi.Parameter(
+                "ids",
+                openapi.IN_QUERY,
+                description="Comma separated IDs to delete. Example: 1,2,3",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+            openapi.Parameter(
+                "exclude_ids",
+                openapi.IN_QUERY,
+                description="Comma separated IDs to EXCLUDE (only used when all=true)",
+                type=openapi.TYPE_STRING,
+                required=False,
+            ),
+        ],
+        responses={204: "No content", 400: "Bad request"},
+    )
+    @transaction.atomic
+    def delete(self, request):
+        delete_all = request.query_params.get("all", "false").lower() == "true"
+        ids = parse_uuid_query_param(request.query_params.get("ids", ""), "ids")
+        exclude_ids = parse_uuid_query_param(
+            request.query_params.get("exclude_ids", ""),
+            "exclude_ids",
+        )
+
+        if delete_all:
+            queryset = self.get_queryset().exclude(id__in=exclude_ids)
+        else:
+            queryset = self.get_queryset().filter(id__in=ids)
+
+        queryset.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
