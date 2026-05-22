@@ -13,7 +13,7 @@ class NetworkServer(BaseModel):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    logo = models.URLField(blank=True, null=True)
+    logo = models.CharField(max_length=255, blank=True, null=True)
     description = models.CharField(max_length=255)
     connection_types = ArrayField(
         models.CharField(max_length=50, choices=TYPE_CONNECT, null=True),

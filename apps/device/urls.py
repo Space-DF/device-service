@@ -7,6 +7,7 @@ from apps.device.views import (
     DeviceViewSet,
     FindDeviceByCodeView,
     ListCreateSpaceDeviceViewSet,
+    RetrieveSpaceDeviceView,
     SpaceDeviceLookupView,
     TripViewSet,
 )
@@ -23,6 +24,11 @@ urlpatterns = [
         "device-spaces/<uuid:device_id>/internal",
         SpaceDeviceLookupView.as_view(),
         name="device_spaces_lookup",
+    ),
+    path(
+        "device-spaces/device/<uuid:device_id>",
+        RetrieveSpaceDeviceView.as_view(),
+        name="device_spaces_by_device_id",
     ),
     path("device-spaces", ListCreateSpaceDeviceViewSet.as_view(), name="device_spaces"),
     path(

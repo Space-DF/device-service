@@ -1,10 +1,8 @@
 import logging
 
-from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.space import SpaceListCreateAPIView
-from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -80,14 +78,13 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     queryset = SpaceDevice.objects.select_related(
-        "device", "device__lorawan_device"
+        "device", "device__lorawan_device", "floor", "area", "facility", "position"
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     filterset_class = SpaceDeviceFilter
     ordering_fields = ["created_at", "name"]
-    ordering = ["-created_at"]
     space_field = "space"
     search_fields = [
         "name",
@@ -100,31 +97,6 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         if self.request.method == "POST":
             return CreateSpaceDeviceSerializer
         return SpaceDeviceSerializer
-
-    @transaction.atomic
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        space_slug = request.headers.get("X-Space", None)
-        space = Space.objects.filter(slug_name=space_slug).first()
-
-        dev_eui = serializer.validated_data.pop("dev_eui").lower()
-        device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
-        if not device:
-            return Response(
-                {"detail": f"Device with dev_eui = {dev_eui} not in the organization"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if device.status == DeviceStatus.ACTIVE:
-            return Response(
-                {"detail": f"Device with dev_eui = {dev_eui} not in the inventory"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        device.status = DeviceStatus.ACTIVE
-        device.save()
-        serializer.save(space=space, device=device)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class FindDeviceByCodeView(views.APIView):
@@ -255,6 +227,7 @@ class TripViewSet(
 
 
 class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatDeviceSerializer
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
         "space_devices"
@@ -279,6 +252,7 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
 
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
+    swagger_schema = None
     serializer_class = FormatSpaceDeviceSerializer
     queryset = SpaceDevice.objects.all()
 
@@ -287,3 +261,17 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         device_id = self.kwargs["device_id"]
 
         return get_object_or_404(queryset, device_id=device_id)
+
+
+class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
+    serializer_class = SpaceDeviceSerializer
+    lookup_field = "device_id"
+    queryset = SpaceDevice.objects.select_related(
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "space",
+    ).all()
