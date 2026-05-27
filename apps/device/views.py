@@ -13,6 +13,7 @@ from rest_framework import generics, mixins, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.device.constants import DeviceStatus
@@ -100,36 +101,21 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
             return CreateSpaceDeviceSerializer
         return SpaceDeviceSerializer
 
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return self.queryset
-
-        space_slug = self.request.headers.get("X-Space")
-        if not space_slug:
-            return self.queryset.none()
-
-        return super().get_queryset()
-
     def list(self, request, *args, **kwargs):
+        logger.info(
+            "Listing space devices with filters:", str(request), str(request.headers)
+        )
         service = SpaceDeviceListService(request)
-        is_authenticated = bool(request.headers.get("X-User-ID"))
         is_smart_fleet_monitor = (
             getattr(request.tenant, "template", "")
             == OrganizationTemplate.SMART_FLEET_MONITOR
         )
 
-        if not request.headers.get("X-Space"):
-            results = service.sort_results(list(service.get_public_devices_queryset()))
+        queryset = self.filter_queryset(self.get_queryset())
+        if is_smart_fleet_monitor:
+            results = service.get_combined_results(queryset)
         else:
-            queryset = self.filter_queryset(self.get_queryset())
-            if not is_smart_fleet_monitor:
-                results = queryset
-            elif is_authenticated:
-                results = service.get_combined_results(queryset)
-            else:
-                results = service.sort_results(
-                    list(service.get_public_devices_queryset())
-                )
+            results = queryset
 
         page = self.paginate_queryset(results)
         if page is not None:
@@ -317,19 +303,31 @@ class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
         "space",
     ).all()
 
-    def get_object(self):
-        device_id = self.kwargs["device_id"]
-        is_authenticated = bool(self.request.headers.get("X-User-ID"))
 
-        if is_authenticated:
-            space_device = self.get_queryset().filter(device_id=device_id).first()
-            if space_device is not None:
-                return space_device
+class ListPublicSpaceDeviceView(generics.ListAPIView):
+    serializer_class = SpaceDeviceSerializer
+    pagination_class = BasePagination
+    permission_classes = [AllowAny]
+    filter_backends = [OrderingFilter, SearchFilter]
+    ordering_fields = ["created_at"]
+    ordering = ["-created_at"]
+    search_fields = [
+        "lorawan_device__dev_eui",
+        "device_model",
+    ]
 
-        return get_object_or_404(
-            Device.objects.select_related("lorawan_device").filter(
-                id=device_id,
-                is_published=True,
-                space_devices__isnull=True,
-            )
+    def get_queryset(self):
+        service = SpaceDeviceListService(self.request)
+        return service.get_public_devices_queryset().order_by("-created_at")
+
+
+class RetrievePublicSpaceDeviceView(generics.RetrieveAPIView):
+    serializer_class = SpaceDeviceSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        return Device.objects.select_related("lorawan_device").filter(
+            is_published=True,
+            space_devices__isnull=True,
         )

@@ -262,19 +262,18 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         return data
 
     def _to_public_representation(self, instance: Device) -> dict:
-        lorawan_device = getattr(instance, "lorawan_device", None)
         device_id = str(instance.id)
 
         return {
-            "id": None,
-            "name": getattr(lorawan_device, "dev_eui", None) or device_id,
+            "id": device_id,
+            "name": "Public device",
             "device": DeviceSerializer(instance, context=self.context).data,
             "device_properties": self._get_device_properties(instance),
             "entities": self._get_entities(instance),
         }
 
     def _get_device_properties(self, obj: SpaceDevice | Device) -> Optional[dict]:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device.id)
+        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
         try:
             device_props = self.telemetry_client.get_device_properties(
                 device_id,
@@ -293,7 +292,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return None
 
     def _get_entities(self, obj: SpaceDevice | Device) -> list[dict]:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device.id)
+        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
         try:
             entities = self.telemetry_client.get_entities(
                 device_id,

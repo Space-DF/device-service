@@ -2,6 +2,8 @@ from apps.device.models import Device
 
 
 class SpaceDeviceListService:
+    ALLOWED_ORDERING_FIELDS = {"created_at", "name"}
+
     def __init__(self, request):
         self.request = request
 
@@ -30,6 +32,8 @@ class SpaceDeviceListService:
     def sort_results(self, results):
         ordering = self.request.query_params.get("ordering", "-created_at")
         field = ordering.lstrip("-")
+        if field not in self.ALLOWED_ORDERING_FIELDS:
+            field = "created_at"
 
         def sort_key(obj):
             value = getattr(obj, field, None)
