@@ -252,22 +252,32 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             )
         return data
 
-    def to_representation(self, instance: SpaceDevice):
+    def to_representation(self, instance):
+        if isinstance(instance, Device):
+            return self._to_public_representation(instance)
+
         data = super().to_representation(instance)
         data["device_properties"] = self._get_device_properties(instance)
         data["entities"] = self._get_entities(instance)
         return data
 
-    def _get_telemetry_identifiers(self, obj: SpaceDevice) -> tuple[str, str]:
-        return str(obj.device.id), obj.space.slug_name
+    def _to_public_representation(self, instance: Device) -> dict:
+        device_id = str(instance.id)
 
-    def _get_device_properties(self, obj: SpaceDevice) -> Optional[dict]:
+        return {
+            "id": device_id,
+            "name": "Public device",
+            "device": DeviceSerializer(instance, context=self.context).data,
+            "device_properties": self._get_device_properties(instance),
+            "entities": self._get_entities(instance),
+        }
+
+    def _get_device_properties(self, obj: SpaceDevice | Device) -> Optional[dict]:
+        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
         try:
-            device_id, space_slug = self._get_telemetry_identifiers(obj)
             device_props = self.telemetry_client.get_device_properties(
                 device_id,
                 self.organization_slug,
-                space_slug,
             )
 
             logger.info(
@@ -277,17 +287,16 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         except Exception:
             logger.exception(
                 "Error fetching device properties for device %s",
-                obj.device.id,
+                device_id,
             )
             return None
 
-    def _get_entities(self, obj: SpaceDevice) -> list[dict]:
+    def _get_entities(self, obj: SpaceDevice | Device) -> list[dict]:
+        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
         try:
-            device_id, space_slug = self._get_telemetry_identifiers(obj)
             entities = self.telemetry_client.get_entities(
                 device_id,
                 self.organization_slug,
-                space_slug,
             )
 
             logger.info("Successfully fetched entities for device %s", device_id)
@@ -295,7 +304,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         except Exception:
             logger.exception(
                 "Error fetching entities for device %s",
-                obj.device.id,
+                device_id,
             )
             return []
 
@@ -337,12 +346,17 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
         if not device:
             raise serializers.ValidationError(
-                f"Device with dev_eui = {dev_eui} not in the organization"
+                "This device does not belong to the organization."
             )
 
         if device.status == DeviceStatus.ACTIVE:
             raise serializers.ValidationError(
-                f"Device with dev_eui = {dev_eui} not in the inventory"
+                "This device is already active and cannot be added from inventory."
+            )
+
+        if device.is_published:
+            raise serializers.ValidationError(
+                "This device has been published and cannot be added to space."
             )
 
         device.status = DeviceStatus.ACTIVE
