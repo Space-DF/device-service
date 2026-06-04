@@ -3,7 +3,8 @@ import logging
 from common.apps.organization.constants import OrganizationTemplate
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
-from common.views.space import SpaceListCreateAPIView
+from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
+from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -28,6 +29,7 @@ from apps.device.serializers import (
     SpaceDeviceSerializer,
     TripDetailSerializer,
     TripListSerializer,
+    UpdateSpaceDevicePositionSerializer,
     UpdateSpaceDeviceSerializer,
 )
 from apps.device.services.space_device_list_service import SpaceDeviceListService
@@ -331,3 +333,43 @@ class RetrievePublicSpaceDeviceView(generics.RetrieveAPIView):
             is_published=True,
             space_devices__isnull=True,
         )
+
+
+class BulkUpdateSpaceDeviceView(SpaceUpdateAPIView):
+    queryset = SpaceDevice.objects.select_related("device", "space").all()
+    serializer_class = UpdateSpaceDevicePositionSerializer
+    space_field = "space"
+    http_method_names = ["put"]
+
+    @swagger_auto_schema(
+        request_body=UpdateSpaceDevicePositionSerializer(many=True),
+        responses={200: UpdateSpaceDevicePositionSerializer(many=True)},
+    )
+    def put(self, request, *args, **kwargs):
+        serializer = self.get_serializer(many=True, data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        ids = [item["id"] for item in serializer.validated_data]
+        instances = self.filter_queryset(self.get_queryset()).in_bulk(
+            ids,
+            field_name="id",
+        )
+
+        missing_ids = set(ids) - set(instances.keys())
+        if missing_ids:
+            raise ParseError(
+                f"Not found for id(s): " f"{', '.join(map(str, missing_ids))}"
+            )
+
+        ordered_instances = [
+            instances[item["id"]] for item in serializer.validated_data
+        ]
+
+        with transaction.atomic():
+            serializer = self.get_serializer(
+                ordered_instances, data=request.data, many=True
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
