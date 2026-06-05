@@ -439,7 +439,9 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
 class MultiSpaceDevicePositionSerializer(serializers.ListSerializer):
     def update(self, instances, validated_data):
         instance_mapping = {instance.id: instance for instance in instances}
-        devices_to_update = []
+        update_devices = []
+        create_positions = []
+        update_positions = {}
         old_position_ids = []
 
         for item in validated_data:
@@ -450,27 +452,43 @@ class MultiSpaceDevicePositionSerializer(serializers.ListSerializer):
                 if instance.position_id:
                     old_position_ids.append(instance.position_id)
                 instance.position = None
+                update_devices.append(instance)
+                continue
+
+            position = instance.position or Position()
+            for attr, value in position_data.items():
+                setattr(position, attr, value)
+
+            if instance.position_id:
+                update_positions[position.id] = position
             else:
-                position_serializer = PositionSerializer(
-                    instance=instance.position,
-                    data=position_data,
-                    partial=True,
-                )
-                position_serializer.is_valid(raise_exception=True)
-                instance.position = position_serializer.save()
+                create_positions.append(position)
 
-            devices_to_update.append(instance)
+            instance.position = position
+            update_devices.append(instance)
 
-        SpaceDevice.objects.bulk_update(
-            devices_to_update,
-            ["position", "updated_at"],
-        )
+        if create_positions:
+            Position.objects.bulk_create(create_positions)
+
+        if update_positions:
+            Position.objects.bulk_update(
+                update_positions.values(),
+                ["x", "y", "z", "updated_at"],
+            )
+
+        if update_devices:
+            SpaceDevice.objects.bulk_update(
+                update_devices,
+                ["position", "updated_at"],
+            )
+
         if old_position_ids:
             Position.objects.filter(
                 id__in=old_position_ids,
                 position_devices__isnull=True,
             ).delete()
-        return devices_to_update
+
+        return update_devices
 
 
 class UpdateSpaceDevicePositionSerializer(serializers.ModelSerializer):

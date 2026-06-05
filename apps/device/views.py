@@ -104,9 +104,6 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         return SpaceDeviceSerializer
 
     def list(self, request, *args, **kwargs):
-        logger.info(
-            "Listing space devices with filters:", str(request), str(request.headers)
-        )
         service = SpaceDeviceListService(request)
         is_smart_fleet_monitor = (
             getattr(request.tenant, "template", "")
@@ -336,7 +333,7 @@ class RetrievePublicSpaceDeviceView(generics.RetrieveAPIView):
 
 
 class BulkUpdateSpaceDeviceView(SpaceUpdateAPIView):
-    queryset = SpaceDevice.objects.select_related("device", "space").all()
+    queryset = SpaceDevice.objects.select_related("device", "space", "position").all()
     serializer_class = UpdateSpaceDevicePositionSerializer
     space_field = "space"
     http_method_names = ["put"]
