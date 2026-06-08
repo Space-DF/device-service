@@ -19,6 +19,7 @@ from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
+from apps.placement.models import Position
 from apps.placement.serializers import PositionSerializer
 
 logger = logging.getLogger(__name__)
@@ -412,8 +413,14 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
             return instance
 
         if position_data is None:
+            old_position_id = instance.position_id
             instance.position = None
             instance.save()
+            if old_position_id:
+                Position.objects.filter(
+                    id=old_position_id,
+                    position_devices__isnull=True,
+                ).delete()
             return instance
 
         serializer = (
@@ -427,6 +434,71 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
         instance.save()
         return instance
+
+
+class MultiSpaceDevicePositionSerializer(serializers.ListSerializer):
+    def update(self, instances, validated_data):
+        instance_mapping = {instance.id: instance for instance in instances}
+        update_devices = []
+        create_positions = []
+        update_positions = {}
+        old_position_ids = []
+
+        for item in validated_data:
+            instance = instance_mapping[item["id"]]
+            position_data = item.get("position")
+
+            if position_data is None:
+                if instance.position_id:
+                    old_position_ids.append(instance.position_id)
+                instance.position = None
+                update_devices.append(instance)
+                continue
+
+            position = instance.position or Position()
+            for attr, value in position_data.items():
+                setattr(position, attr, value)
+
+            if instance.position_id:
+                update_positions[position.id] = position
+            else:
+                create_positions.append(position)
+
+            instance.position = position
+            update_devices.append(instance)
+
+        if create_positions:
+            Position.objects.bulk_create(create_positions)
+
+        if update_positions:
+            Position.objects.bulk_update(
+                update_positions.values(),
+                ["x", "y", "z", "updated_at"],
+            )
+
+        if update_devices:
+            SpaceDevice.objects.bulk_update(
+                update_devices,
+                ["position", "updated_at"],
+            )
+
+        if old_position_ids:
+            Position.objects.filter(
+                id__in=old_position_ids,
+                position_devices__isnull=True,
+            ).delete()
+
+        return update_devices
+
+
+class UpdateSpaceDevicePositionSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField()
+    position = PositionSerializer(allow_null=True)
+
+    class Meta:
+        model = SpaceDevice
+        fields = ["id", "position"]
+        list_serializer_class = MultiSpaceDevicePositionSerializer
 
 
 class FormatSpaceDeviceSerializer(serializers.ModelSerializer):

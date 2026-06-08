@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.device.views import (
+    BulkUpdateSpaceDeviceView,
     DeleteSpaceDeviceViewSet,
     DeviceLookupView,
     DeviceViewSet,
@@ -43,6 +44,11 @@ urlpatterns = [
         name="device_spaces_by_device_id",
     ),
     path("device-spaces", ListCreateSpaceDeviceViewSet.as_view(), name="device_spaces"),
+    path(
+        "device-spaces/bulk-update",
+        BulkUpdateSpaceDeviceView.as_view(),
+        name="bulk_update_device_spaces",
+    ),
     path(
         "device-spaces/<str:id>",
         DeleteSpaceDeviceViewSet.as_view(),
