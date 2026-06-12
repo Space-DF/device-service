@@ -66,7 +66,7 @@ class TripAnalyzerService:
         self.stop_time_minutes = getattr(settings, "TRIP_STOP_TIME_MINUTES", 5)
         self.offline_split_minutes = getattr(settings, "TRIP_OFFLINE_SPLIT_MINUTES", 10)
 
-        logger.error(
+        logger.info(
             "TripAnalyzer initialized with: min_valid_points>%s, "
             "stop_distance=%sm, stop_time=%smin, offline_split=%smin",
             self.min_valid_trip_points,
@@ -84,13 +84,6 @@ class TripAnalyzerService:
         device_id = str(space_device.device.id)
         space_slug = space_device.space.slug_name
 
-        logger.error(
-            "Analyze trips for device=%s, space=%s, current_trip=%s",
-            device_id,
-            space_slug,
-            current_trip.id if current_trip else None,
-        )
-
         context = self._build_analysis_context(space_device, current_trip)
 
         new_locations = self._fetch_preprocessed_locations(
@@ -101,7 +94,7 @@ class TripAnalyzerService:
         )
 
         if not new_locations:
-            logger.error("No new locations for device=%s, nothing to update", device_id)
+            logger.debug("No new locations for device=%s, nothing to update", device_id)
             return
 
         with transaction.atomic():
@@ -183,7 +176,7 @@ class TripAnalyzerService:
         device_id: str,
         start_time: datetime,
     ) -> list[LocationPoint]:
-        logger.error("Fetching locations for device=%s since %s", device_id, start_time)
+        logger.info("Fetching locations for device=%s since %s", device_id, start_time)
 
         locations: list[LocationPoint] = self.telemetry_client.get_location_history(
             device_id=device_id,
@@ -209,7 +202,7 @@ class TripAnalyzerService:
         analysis_start: datetime | None,
     ):
         offline_split_delta = timedelta(minutes=self.offline_split_minutes)
-        logger.error(
+        logger.debug(
             "Process locations for device=%s current_trip=%s analysis_start=%s total_points=%s",
             space_device.device_id,
             current_trip.id if current_trip else None,
@@ -225,7 +218,7 @@ class TripAnalyzerService:
         for loc in new_locations:
             coords = (loc.latitude, loc.longitude)
             is_new = analysis_start is None or loc.timestamp > analysis_start
-            logger.error(
+            logger.debug(
                 "Processing point for device=%s timestamp=%s coords=%s is_new=%s "
                 "current_trip=%s pending_points=%s trip_points=%s",
                 space_device.device_id,
@@ -247,7 +240,7 @@ class TripAnalyzerService:
                 continue
 
             gap = loc.timestamp - state.prev_time
-            logger.error(
+            logger.debug(
                 "Device %s step: gap=%.2fmin, prev_time=%s, curr_time=%s",
                 space_device.device_id,
                 gap.total_seconds() / 60.0,
@@ -290,7 +283,7 @@ class TripAnalyzerService:
                     coords[1],
                 )
 
-            logger.error(
+            logger.debug(
                 "Device %s step_distance=%.2fm stationary_distance=%.2fm, "
                 "prev_coords=%s, curr_coords=%s",
                 space_device.device_id,
@@ -412,7 +405,7 @@ class TripAnalyzerService:
         stop_duration_min = (
             loc.timestamp - state.stop_start_time
         ).total_seconds() / 60.0
-        logger.error(
+        logger.debug(
             "Device %s stationary for %.2fmin",
             space_device.device_id,
             stop_duration_min,
@@ -468,7 +461,7 @@ class TripAnalyzerService:
                 loc.longitude,
             )
             if anchor_distance <= self.stop_distance_meters:
-                logger.error(
+                logger.debug(
                     "Pending anchor retained for device=%s timestamp=%s "
                     "anchor_timestamp=%s anchor_distance=%.2fm threshold=%.2fm",
                     space_device.device_id,
@@ -479,7 +472,7 @@ class TripAnalyzerService:
                 )
                 return
 
-            logger.error(
+            logger.info(
                 "Pending anchor promoted for device=%s anchor_timestamp=%s "
                 "movement_timestamp=%s anchor_distance=%.2fm",
                 space_device.device_id,
@@ -493,14 +486,14 @@ class TripAnalyzerService:
             )
             state.pending_anchor_location = None
 
-        logger.error(
+        logger.info(
             "Appending pending point for device=%s timestamp=%s pending_points_before=%s",
             space_device.device_id,
             loc.timestamp,
             len(state.pending_trip_locations),
         )
         self._append_trip_location(state.pending_trip_locations, loc)
-        logger.error(
+        logger.info(
             "Pending buffer updated for device=%s pending_points_after=%s",
             space_device.device_id,
             len(state.pending_trip_locations),
@@ -566,7 +559,7 @@ class TripAnalyzerService:
         """
         is_valid = trip.pk is not None or self._validate_trip(trip_locations)
 
-        logger.error(
+        logger.info(
             "Finished trip=%s finished_at=%s reason=%s "
             "lat=%s lng=%s valid=%s persisted=%s buffered_locations=%s",
             trip.id if trip.pk else None,
@@ -605,7 +598,7 @@ class TripAnalyzerService:
 
     def _validate_trip(self, trip_locations: list[LocationPoint]) -> bool:
         if len(trip_locations) < 2:
-            logger.error(
+            logger.info(
                 "Trip validation skipped: buffered_points=%s reason=too_few_points",
                 len(trip_locations),
             )
@@ -613,7 +606,7 @@ class TripAnalyzerService:
 
         compressed_locations = self.filter_processor.compress_trajectory(trip_locations)
         is_valid = len(compressed_locations) >= self.min_valid_trip_points
-        logger.error(
+        logger.info(
             "Trip validation: buffered_points=%s compressed_points=%s "
             "min_valid_trip_points=%s comparator='>=' valid=%s",
             len(trip_locations),
@@ -628,7 +621,7 @@ class TripAnalyzerService:
     ) -> None:
         if not trip_locations:
             trip_locations.append(location)
-            logger.error(
+            logger.debug(
                 "Buffered point appended timestamp=%s coords=(%s, %s) total_points=%s",
                 location.timestamp,
                 location.latitude,
@@ -643,7 +636,7 @@ class TripAnalyzerService:
             and last.latitude == location.latitude
             and last.longitude == location.longitude
         ):
-            logger.error(
+            logger.debug(
                 "Buffered point skipped as duplicate timestamp=%s coords=(%s, %s)",
                 location.timestamp,
                 location.latitude,
@@ -651,7 +644,7 @@ class TripAnalyzerService:
             )
             return
         trip_locations.append(location)
-        logger.error(
+        logger.debug(
             "Buffered point appended timestamp=%s coords=(%s, %s) total_points=%s",
             location.timestamp,
             location.latitude,
@@ -665,7 +658,7 @@ class TripAnalyzerService:
         space_device: SpaceDevice,
     ) -> None:
         if not self._validate_trip(state.pending_trip_locations):
-            logger.error(
+            logger.debug(
                 "Trip not created for device=%s pending_points=%s",
                 space_device.device_id,
                 len(state.pending_trip_locations),
@@ -682,7 +675,7 @@ class TripAnalyzerService:
             last_longitude=last_location.longitude,
             last_report=last_location.timestamp,
         )
-        logger.error(
+        logger.info(
             "Trip created for device=%s trip_id=%s started_at=%s buffered_points=%s",
             space_device.device_id,
             state.current_trip.id,
