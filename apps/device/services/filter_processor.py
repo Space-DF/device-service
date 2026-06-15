@@ -1,11 +1,13 @@
 import logging
+import math
 from typing import List
 
 from common.utils.haversine_distance import haversine_distance
 
 from apps.device.constants import (
+    DEFAULT_COMPRESSION_EPSILON_METERS,
     DEFAULT_MAX_SPEED_KMH,
-    DEFAULT_MIN_POINT_DISTANCE,
+    DEFAULT_MIN_POINT_DISTANCE_METERS,
     LocationPoint,
 )
 
@@ -20,7 +22,8 @@ class FilterProcessor:
 
     def __init__(self):
         self.max_speed_kmh = DEFAULT_MAX_SPEED_KMH
-        self.min_point_distance = DEFAULT_MIN_POINT_DISTANCE
+        self.min_point_distance_meters = DEFAULT_MIN_POINT_DISTANCE_METERS
+        self.compression_epsilon_meters = DEFAULT_COMPRESSION_EPSILON_METERS
 
     def process_trajectory(
         self, locations: List[LocationPoint], device_id: str
@@ -30,7 +33,7 @@ class FilterProcessor:
 
         Optimal order:
         1. Filter outliers (impossible speeds)
-        2. Deduplicate consecutive identical points
+        2. Deduplicate consecutive nearby points
         3. Compress with Douglas-Peucker (preserve shape before smoothing)
         """
         if len(locations) < 2:
@@ -40,7 +43,7 @@ class FilterProcessor:
         if len(filtered) < 2:
             return filtered
 
-        deduplicated = self._deduplicate_identical_points(filtered)
+        deduplicated = self._deduplicate_nearby_points(filtered)
         if len(deduplicated) < 2:
             return deduplicated
 
@@ -53,6 +56,14 @@ class FilterProcessor:
             f"{len(deduplicated)} → {len(compressed)} points"
         )
         return compressed
+
+    def filter_outliers(self, locations: List[LocationPoint]) -> List[LocationPoint]:
+        return self._filter_outliers(locations)
+
+    def compress_trajectory(
+        self, locations: List[LocationPoint]
+    ) -> List[LocationPoint]:
+        return self._compress_trajectory(locations)
 
     def _filter_outliers(self, locations: List[LocationPoint]) -> List[LocationPoint]:
         if len(locations) < 2:
@@ -80,12 +91,13 @@ class FilterProcessor:
 
         return filtered
 
-    def _deduplicate_identical_points(
+    def _deduplicate_nearby_points(
         self, locations: List[LocationPoint]
     ) -> List[LocationPoint]:
         """
-        Remove consecutive points with identical coordinates.
-        Keeps the first occurrence of each consecutive group of identical locations.
+        Remove consecutive nearby points.
+        If a new point is within threshold of the last kept point,
+        replace the old point with the newer point.
         """
         if len(locations) < 2:
             return locations
@@ -93,10 +105,25 @@ class FilterProcessor:
         deduplicated = [locations[0]]
         for curr in locations[1:]:
             prev = deduplicated[-1]
-            if curr.latitude != prev.latitude or curr.longitude != prev.longitude:
+
+            distance_m = haversine_distance(
+                prev.latitude,
+                prev.longitude,
+                curr.latitude,
+                curr.longitude,
+            )
+
+            if distance_m > self.min_point_distance_meters:
                 deduplicated.append(curr)
             else:
-                logger.debug(f"Duplicate removed: ({curr.latitude}, {curr.longitude})")
+                logger.debug(
+                    "Nearby old point replaced: distance=%.3fm threshold=%.3fm old_timestamp=%s new_timestamp=%s",
+                    distance_m,
+                    self.min_point_distance_meters,
+                    prev.timestamp,
+                    curr.timestamp,
+                )
+                deduplicated[-1] = curr
 
         return deduplicated
 
@@ -133,34 +160,54 @@ class FilterProcessor:
             else:
                 return [locs[0], locs[-1]]
 
-        return _simplify(locations, self.min_point_distance)
+        return _simplify(locations, self.compression_epsilon_meters)
 
     def _point_to_line_distance(
         self, point_a: LocationPoint, point_b: LocationPoint, point_c: LocationPoint
     ) -> float:
         """
-        Calculate perpendicular distance from point_c to line AB (in meters).
-
-        Uses Haversine distance for accurate great-circle calculation.
+        Calculate distance from point_c to segment AB in local projected meters.
         """
-        # Calculate distances using Haversine formula
-        dist_ac = haversine_distance(
-            point_a.latitude, point_a.longitude, point_c.latitude, point_c.longitude
+        ref_lat = point_a.latitude
+        ref_lon = point_a.longitude
+
+        ax, ay = 0.0, 0.0
+        bx, by = self._project_to_local_meters(
+            point_b.latitude, point_b.longitude, ref_lat, ref_lon
         )
-        dist_bc = haversine_distance(
-            point_b.latitude, point_b.longitude, point_c.latitude, point_c.longitude
-        )
-        dist_ab = haversine_distance(
-            point_a.latitude, point_a.longitude, point_b.latitude, point_b.longitude
+        cx, cy = self._project_to_local_meters(
+            point_c.latitude, point_c.longitude, ref_lat, ref_lon
         )
 
-        # If line segment is too short, return distance to point A
-        if dist_ab < 1:
-            return dist_ac
+        abx = bx - ax
+        aby = by - ay
+        acx = cx - ax
+        acy = cy - ay
+        segment_length_sq = abx * abx + aby * aby
 
-        # Calculate perpendicular distance using triangle area formula
-        # area = 0.5 * base * height => height = 2*area / base
-        s = (dist_ac + dist_bc + dist_ab) / 2
-        area = (s * (s - dist_ac) * (s - dist_bc) * (s - dist_ab)) ** 0.5
+        if segment_length_sq <= 1e-9:
+            return math.hypot(acx, acy)
 
-        return max(0, 2 * area / dist_ab)
+        projection = (acx * abx + acy * aby) / segment_length_sq
+        projection = max(0.0, min(1.0, projection))
+
+        closest_x = ax + projection * abx
+        closest_y = ay + projection * aby
+        return math.hypot(cx - closest_x, cy - closest_y)
+
+    def _project_to_local_meters(
+        self,
+        latitude: float,
+        longitude: float,
+        ref_latitude: float,
+        ref_longitude: float,
+    ) -> tuple[float, float]:
+        earth_radius_m = 6371000.0
+        lat_rad = math.radians(latitude)
+        lon_rad = math.radians(longitude)
+        ref_lat_rad = math.radians(ref_latitude)
+        ref_lon_rad = math.radians(ref_longitude)
+
+        x = (lon_rad - ref_lon_rad) * math.cos((lat_rad + ref_lat_rad) / 2.0)
+        y = lat_rad - ref_lat_rad
+        return earth_radius_m * x, earth_radius_m * y

@@ -5,7 +5,8 @@ from django.db import models
 
 # Filter Constants
 DEFAULT_MAX_SPEED_KMH = 150.0
-DEFAULT_MIN_POINT_DISTANCE = 10.0  # meters
+DEFAULT_MIN_POINT_DISTANCE_METERS = 2.0
+DEFAULT_COMPRESSION_EPSILON_METERS = 5.0
 
 
 @dataclass
