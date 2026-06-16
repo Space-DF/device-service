@@ -178,14 +178,14 @@ class TripViewSet(
             "space_device__space__is_active": True,
         }
 
-        queryset = Trip.objects.filter(**filters).select_related("space_device__space")
+        queryset = Trip.objects.filter(**filters).select_related(
+            "space_device",
+            "space_device__space",
+            "space_device__device",
+        )
 
         if self.action == "retrieve":
-            queryset = queryset.select_related(
-                "space_device",
-                "space_device__device",
-                "space_device__device__lorawan_device",
-            )
+            queryset = queryset.select_related("space_device__device__lorawan_device")
 
         return queryset
 
@@ -244,7 +244,6 @@ class TripViewSet(
 
         # Get the trips (including any newly created ones)
         queryset = self.filter_queryset(self.get_queryset())
-        logger.info(f"Found {queryset.count()} trips in queryset")
 
         # List never includes checkpoints
         page = self.paginate_queryset(queryset)
