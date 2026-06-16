@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = Device.objects.select_related("lorawan_device").all()
+    queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
@@ -83,7 +83,13 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     queryset = SpaceDevice.objects.select_related(
-        "device", "device__lorawan_device", "floor", "area", "facility", "position"
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "building",
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination

@@ -61,13 +61,7 @@ class AreaListCreateView(SpaceListCreateAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return super().get_queryset()
-        return (
-            super()
-            .get_queryset()
-            .filter(
-                floor_id=self.kwargs["floor_id"],
-            )
-        )
+        return super().get_queryset().filter(floor_id=self.kwargs["floor_id"])
 
     def perform_create(self, serializer):
         floor = get_object_or_404(Floor, pk=self.kwargs["floor_id"])
