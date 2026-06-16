@@ -37,6 +37,7 @@ SECRET_KEY = os.getenv(
 ALLOWED_HOSTS = [os.getenv("ALLOWED_HOSTS", "*")]
 HOST = os.getenv("HOST", "http://localhost:8000/")
 DEFAULT_TENANT_HOST = os.getenv("DEFAULT_TENANT_HOST", "localhost")
+SILK_ENABLED = os.getenv("ENV", "dev").lower() == "dev"
 
 # Application definition
 SHARED_APPS = [
@@ -52,6 +53,9 @@ SHARED_APPS = [
     "common.apps.organization",
     "common.apps.celery_autoreload",
 ]
+
+if SILK_ENABLED:
+    SHARED_APPS.append("silk")
 
 TENANT_APPS = [
     "django.contrib.auth",
@@ -155,6 +159,23 @@ TENANT_DOMAIN_MODEL = "organization.Domain"
 SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
 PUBLIC_SCHEMA_URLCONF = "device_service.urls_public"
 
+if SILK_ENABLED:
+    MIDDLEWARE.insert(3, "silk.middleware.SilkyMiddleware")
+
+    def silky_intercept_func(request):
+        return request.path.startswith("/api/")
+
+    SILKY_INTERCEPT_FUNC = silky_intercept_func
+    SILKY_AUTHENTICATION = False
+    SILKY_AUTHORISATION = False
+    SILKY_PYTHON_PROFILER = True
+    SILKY_PYTHON_PROFILER_BINARY = False
+    SILKY_MAX_REQUEST_BODY_SIZE = 1024
+    SILKY_MAX_RESPONSE_BODY_SIZE = 0
+    SILKY_META = True
+    SILKY_INTERCEPT_PERCENT = 10
+    SILKY_MAX_RECORDED_REQUESTS_CHECK_PERCENT = 10
+
 # Celery
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_ACKS_LATE = True
@@ -172,7 +193,7 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@localhost
 NEW_ORGANIZATION_HANDLER = "apps.device.handlers.NewOrganizationHandler"
 
 # Middleware settings
-PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static"]
+PUBLIC_PATHS = ["/api/.well-known", "/docs", "/static", "/silk/device"]
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(
