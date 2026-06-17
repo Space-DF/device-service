@@ -1,9 +1,7 @@
 import logging
 from functools import cached_property
-from typing import Optional
 
 from common.utils.custom_fields import HexCharField
-from common.utils.telemetry_client import TelemetryServiceClient
 from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from rest_framework import serializers
@@ -16,6 +14,9 @@ from apps.building.serializers import (
 )
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.device.services.device_entity_properties_service import (
+    DeviceEntityPropertiesService,
+)
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
@@ -226,10 +227,6 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         ]
 
     @cached_property
-    def telemetry_client(self) -> TelemetryServiceClient:
-        return TelemetryServiceClient()
-
-    @cached_property
     def organization_slug(self) -> str:
         request = self.context.get("request")
         tenant = getattr(request, "tenant", None)
@@ -258,56 +255,29 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return self._to_public_representation(instance)
 
         data = super().to_representation(instance)
-        data["device_properties"] = self._get_device_properties(instance)
-        data["entities"] = self._get_entities(instance)
+        telemetry_data = self._get_device_entity_properties(instance)
+        data["device_properties"] = telemetry_data["device_properties"]
+        data["entities"] = telemetry_data["entities"]
         return data
 
     def _to_public_representation(self, instance: Device) -> dict:
         device_id = str(instance.id)
+        telemetry_data = self._get_device_entity_properties(instance)
 
         return {
             "id": device_id,
             "name": "Public device",
             "device": DeviceSerializer(instance, context=self.context).data,
-            "device_properties": self._get_device_properties(instance),
-            "entities": self._get_entities(instance),
+            "device_properties": telemetry_data["device_properties"],
+            "entities": telemetry_data["entities"],
         }
 
-    def _get_device_properties(self, obj: SpaceDevice | Device) -> Optional[dict]:
+    def _get_device_entity_properties(self, obj: SpaceDevice | Device) -> dict:
         device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        try:
-            device_props = self.telemetry_client.get_device_properties(
-                device_id,
-                self.organization_slug,
-            )
-
-            logger.info(
-                "Successfully fetched device properties for device %s", device_id
-            )
-            return device_props if device_props else None
-        except Exception:
-            logger.exception(
-                "Error fetching device properties for device %s",
-                device_id,
-            )
-            return None
-
-    def _get_entities(self, obj: SpaceDevice | Device) -> list[dict]:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        try:
-            entities = self.telemetry_client.get_entities(
-                device_id,
-                self.organization_slug,
-            )
-
-            logger.info("Successfully fetched entities for device %s", device_id)
-            return entities if entities else []
-        except Exception:
-            logger.exception(
-                "Error fetching entities for device %s",
-                device_id,
-            )
-            return []
+        return DeviceEntityPropertiesService().get_device_entity_properties(
+            device_id,
+            self.organization_slug,
+        )
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
