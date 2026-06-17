@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = Device.objects.select_related("lorawan_device").all()
+    queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
@@ -83,7 +83,13 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     queryset = SpaceDevice.objects.select_related(
-        "device", "device__lorawan_device", "floor", "area", "facility", "position"
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "building",
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
@@ -172,14 +178,14 @@ class TripViewSet(
             "space_device__space__is_active": True,
         }
 
-        queryset = Trip.objects.filter(**filters).select_related("space_device__space")
+        queryset = Trip.objects.filter(**filters).select_related(
+            "space_device",
+            "space_device__space",
+            "space_device__device",
+        )
 
         if self.action == "retrieve":
-            queryset = queryset.select_related(
-                "space_device",
-                "space_device__device",
-                "space_device__device__lorawan_device",
-            )
+            queryset = queryset.select_related("space_device__device__lorawan_device")
 
         return queryset
 
@@ -238,7 +244,6 @@ class TripViewSet(
 
         # Get the trips (including any newly created ones)
         queryset = self.filter_queryset(self.get_queryset())
-        logger.info(f"Found {queryset.count()} trips in queryset")
 
         # List never includes checkpoints
         page = self.paginate_queryset(queryset)
