@@ -6,17 +6,17 @@ from common.utils.telemetry_client import TelemetryServiceClient
 logger = logging.getLogger(__name__)
 
 
-class DeviceEntityPropertiesService:
+class EntityPropertiesService:
     def __init__(self, telemetry_client: TelemetryServiceClient | None = None):
         self.telemetry_client = telemetry_client or TelemetryServiceClient()
 
-    def get_device_entity_properties(
+    def get_entity_properties(
         self,
         device_id: str,
         organization_slug: str,
     ) -> dict:
         try:
-            entities = self.telemetry_client.get_device_entity_properties(
+            entities = self.telemetry_client.get_entity_properties(
                 device_id,
                 organization_slug,
             )
