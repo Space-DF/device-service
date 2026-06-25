@@ -61,10 +61,10 @@ class TripAnalyzerService:
         self.telemetry_client = TelemetryServiceClient()
         self.filter_processor = FilterProcessor()
 
-        self.min_valid_trip_points = getattr(settings, "TRIP_MIN_LOCATION_COUNT", 2)
-        self.stop_distance_meters = getattr(settings, "TRIP_STOP_DISTANCE_METERS", 50)
-        self.stop_time_minutes = getattr(settings, "TRIP_STOP_TIME_MINUTES", 5)
-        self.offline_split_minutes = getattr(settings, "TRIP_OFFLINE_SPLIT_MINUTES", 10)
+        self.min_valid_trip_points = getattr(settings, "TRIP_MIN_LOCATION_COUNT", 3)
+        self.stop_distance_meters = getattr(settings, "TRIP_STOP_DISTANCE_METERS", 20)
+        self.stop_time_minutes = getattr(settings, "TRIP_STOP_TIME_MINUTES", 45)
+        self.offline_split_minutes = getattr(settings, "TRIP_OFFLINE_SPLIT_MINUTES", 30)
 
         logger.info(
             "TripAnalyzer initialized with: min_valid_points>%s, "
