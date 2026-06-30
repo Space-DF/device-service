@@ -50,9 +50,10 @@ SHARED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_yasg",
-    "common.apps.migrate_smart",
     "common.apps.organization",
     "common.apps.celery_autoreload",
+    "common.apps.upload_file",
+    "common.apps.migrate_smart",
 ]
 
 if SILK_ENABLED:

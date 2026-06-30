@@ -1,4 +1,4 @@
-from common.apps.upload_file.service import get_presigned_url
+from common.apps.upload_file.service import get_file_url
 from django.conf import settings
 from rest_framework import serializers
 
@@ -22,8 +22,8 @@ class FacilitySerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if instance.scene_asset:
-            data["url_scene_asset"] = get_presigned_url(
+            data["url_scene_asset"] = get_file_url(
                 settings.AWS_S3.get("AWS_STORAGE_BUCKET_NAME"),
-                f"uploads/{instance.scene_asset}",
+                instance.scene_asset,
             )
         return data

@@ -51,4 +51,5 @@ urlpatterns = [
     path("api/", include("apps.device.urls", namespace="device")),
     path("api/", include("apps.building.urls", namespace="building")),
     path("api/", include("apps.facility.urls", namespace="facility")),
+    path("api/", include("common.apps.upload_file.urls")),
 ]
