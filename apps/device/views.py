@@ -3,7 +3,8 @@ import logging
 from common.apps.organization.constants import OrganizationTemplate
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
-from common.views.space import SpaceListCreateAPIView
+from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
+from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -28,6 +29,7 @@ from apps.device.serializers import (
     SpaceDeviceSerializer,
     TripDetailSerializer,
     TripListSerializer,
+    UpdateSpaceDevicePositionSerializer,
     UpdateSpaceDeviceSerializer,
 )
 from apps.device.services.space_device_list_service import SpaceDeviceListService
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
-    queryset = Device.objects.select_related("lorawan_device").all()
+    queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
@@ -81,7 +83,13 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     queryset = SpaceDevice.objects.select_related(
-        "device", "device__lorawan_device", "floor", "area", "facility", "position"
+        "device",
+        "device__lorawan_device",
+        "floor",
+        "area",
+        "facility",
+        "position",
+        "building",
     ).all()
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
@@ -102,9 +110,6 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         return SpaceDeviceSerializer
 
     def list(self, request, *args, **kwargs):
-        logger.info(
-            "Listing space devices with filters:", str(request), str(request.headers)
-        )
         service = SpaceDeviceListService(request)
         is_smart_fleet_monitor = (
             getattr(request.tenant, "template", "")
@@ -173,14 +178,14 @@ class TripViewSet(
             "space_device__space__is_active": True,
         }
 
-        queryset = Trip.objects.filter(**filters).select_related("space_device__space")
+        queryset = Trip.objects.filter(**filters).select_related(
+            "space_device",
+            "space_device__space",
+            "space_device__device",
+        )
 
         if self.action == "retrieve":
-            queryset = queryset.select_related(
-                "space_device",
-                "space_device__device",
-                "space_device__device__lorawan_device",
-            )
+            queryset = queryset.select_related("space_device__device__lorawan_device")
 
         return queryset
 
@@ -239,7 +244,6 @@ class TripViewSet(
 
         # Get the trips (including any newly created ones)
         queryset = self.filter_queryset(self.get_queryset())
-        logger.info(f"Found {queryset.count()} trips in queryset")
 
         # List never includes checkpoints
         page = self.paginate_queryset(queryset)
@@ -331,3 +335,43 @@ class RetrievePublicSpaceDeviceView(generics.RetrieveAPIView):
             is_published=True,
             space_devices__isnull=True,
         )
+
+
+class BulkUpdateSpaceDeviceView(SpaceUpdateAPIView):
+    queryset = SpaceDevice.objects.select_related("device", "space", "position").all()
+    serializer_class = UpdateSpaceDevicePositionSerializer
+    space_field = "space"
+    http_method_names = ["put"]
+
+    @swagger_auto_schema(
+        request_body=UpdateSpaceDevicePositionSerializer(many=True),
+        responses={200: UpdateSpaceDevicePositionSerializer(many=True)},
+    )
+    def put(self, request, *args, **kwargs):
+        serializer = self.get_serializer(many=True, data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        ids = [item["id"] for item in serializer.validated_data]
+        instances = self.filter_queryset(self.get_queryset()).in_bulk(
+            ids,
+            field_name="id",
+        )
+
+        missing_ids = set(ids) - set(instances.keys())
+        if missing_ids:
+            raise ParseError(
+                f"Not found for id(s): " f"{', '.join(map(str, missing_ids))}"
+            )
+
+        ordered_instances = [
+            instances[item["id"]] for item in serializer.validated_data
+        ]
+
+        with transaction.atomic():
+            serializer = self.get_serializer(
+                ordered_instances, data=request.data, many=True
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

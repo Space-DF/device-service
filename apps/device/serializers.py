@@ -1,9 +1,7 @@
 import logging
 from functools import cached_property
-from typing import Optional
 
 from common.utils.custom_fields import HexCharField
-from common.utils.telemetry_client import TelemetryServiceClient
 from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from rest_framework import serializers
@@ -16,9 +14,11 @@ from apps.building.serializers import (
 )
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.device.services.entity_properties_service import EntityPropertiesService
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
+from apps.placement.models import Position
 from apps.placement.serializers import PositionSerializer
 
 logger = logging.getLogger(__name__)
@@ -225,10 +225,6 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
         ]
 
     @cached_property
-    def telemetry_client(self) -> TelemetryServiceClient:
-        return TelemetryServiceClient()
-
-    @cached_property
     def organization_slug(self) -> str:
         request = self.context.get("request")
         tenant = getattr(request, "tenant", None)
@@ -257,56 +253,29 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return self._to_public_representation(instance)
 
         data = super().to_representation(instance)
-        data["device_properties"] = self._get_device_properties(instance)
-        data["entities"] = self._get_entities(instance)
+        telemetry_data = self._get_entity_properties(instance)
+        data["device_properties"] = telemetry_data["device_properties"]
+        data["entities"] = telemetry_data["entities"]
         return data
 
     def _to_public_representation(self, instance: Device) -> dict:
         device_id = str(instance.id)
+        telemetry_data = self._get_entity_properties(instance)
 
         return {
             "id": device_id,
             "name": "Public device",
             "device": DeviceSerializer(instance, context=self.context).data,
-            "device_properties": self._get_device_properties(instance),
-            "entities": self._get_entities(instance),
+            "device_properties": telemetry_data["device_properties"],
+            "entities": telemetry_data["entities"],
         }
 
-    def _get_device_properties(self, obj: SpaceDevice | Device) -> Optional[dict]:
+    def _get_entity_properties(self, obj: SpaceDevice | Device) -> dict:
         device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        try:
-            device_props = self.telemetry_client.get_device_properties(
-                device_id,
-                self.organization_slug,
-            )
-
-            logger.info(
-                "Successfully fetched device properties for device %s", device_id
-            )
-            return device_props if device_props else None
-        except Exception:
-            logger.exception(
-                "Error fetching device properties for device %s",
-                device_id,
-            )
-            return None
-
-    def _get_entities(self, obj: SpaceDevice | Device) -> list[dict]:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        try:
-            entities = self.telemetry_client.get_entities(
-                device_id,
-                self.organization_slug,
-            )
-
-            logger.info("Successfully fetched entities for device %s", device_id)
-            return entities if entities else []
-        except Exception:
-            logger.exception(
-                "Error fetching entities for device %s",
-                device_id,
-            )
-            return []
+        return EntityPropertiesService().get_entity_properties(
+            device_id,
+            self.organization_slug,
+        )
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
@@ -412,8 +381,14 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
             return instance
 
         if position_data is None:
+            old_position_id = instance.position_id
             instance.position = None
             instance.save()
+            if old_position_id:
+                Position.objects.filter(
+                    id=old_position_id,
+                    position_devices__isnull=True,
+                ).delete()
             return instance
 
         serializer = (
@@ -427,6 +402,71 @@ class UpdateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
         instance.save()
         return instance
+
+
+class MultiSpaceDevicePositionSerializer(serializers.ListSerializer):
+    def update(self, instances, validated_data):
+        instance_mapping = {instance.id: instance for instance in instances}
+        update_devices = []
+        create_positions = []
+        update_positions = {}
+        old_position_ids = []
+
+        for item in validated_data:
+            instance = instance_mapping[item["id"]]
+            position_data = item.get("position")
+
+            if position_data is None:
+                if instance.position_id:
+                    old_position_ids.append(instance.position_id)
+                instance.position = None
+                update_devices.append(instance)
+                continue
+
+            position = instance.position or Position()
+            for attr, value in position_data.items():
+                setattr(position, attr, value)
+
+            if instance.position_id:
+                update_positions[position.id] = position
+            else:
+                create_positions.append(position)
+
+            instance.position = position
+            update_devices.append(instance)
+
+        if create_positions:
+            Position.objects.bulk_create(create_positions)
+
+        if update_positions:
+            Position.objects.bulk_update(
+                update_positions.values(),
+                ["x", "y", "z", "updated_at"],
+            )
+
+        if update_devices:
+            SpaceDevice.objects.bulk_update(
+                update_devices,
+                ["position", "updated_at"],
+            )
+
+        if old_position_ids:
+            Position.objects.filter(
+                id__in=old_position_ids,
+                position_devices__isnull=True,
+            ).delete()
+
+        return update_devices
+
+
+class UpdateSpaceDevicePositionSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField()
+    position = PositionSerializer(allow_null=True)
+
+    class Meta:
+        model = SpaceDevice
+        fields = ["id", "position"]
+        list_serializer_class = MultiSpaceDevicePositionSerializer
 
 
 class FormatSpaceDeviceSerializer(serializers.ModelSerializer):

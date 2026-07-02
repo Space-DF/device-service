@@ -15,6 +15,7 @@ Including another URLconf
 """
 
 from common.swagger.views import get_tenant_schema_view
+from django.conf import settings
 from django.db import connection
 from django.http import HttpResponse
 from django.urls import include, path, re_path
@@ -49,6 +50,11 @@ urlpatterns = [
         r"^device/docs/$",
         schema_view.with_ui("swagger", cache_timeout=0),
         name="schema-swagger-ui",
+    ),
+    *(
+        [path("silk/device/", include("silk.urls", namespace="silk"))]
+        if settings.SILK_ENABLED
+        else []
     ),
     # health
     path("device/api/health", health_check),
