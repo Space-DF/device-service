@@ -1,6 +1,5 @@
 import logging
 
-from common.apps.organization.constants import OrganizationTemplate
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
@@ -111,16 +110,8 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         service = SpaceDeviceListService(request)
-        is_smart_fleet_monitor = (
-            getattr(request.tenant, "template", "")
-            == OrganizationTemplate.SMART_FLEET_MONITOR
-        )
-
         queryset = self.filter_queryset(self.get_queryset())
-        if is_smart_fleet_monitor:
-            results = service.get_combined_results(queryset)
-        else:
-            results = queryset
+        results = service.get_combined_results(queryset)
 
         page = self.paginate_queryset(results)
         if page is not None:
