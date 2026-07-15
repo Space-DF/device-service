@@ -9,3 +9,11 @@ class DeviceQuota(BaseQuota):
         "bulk_create": "device.max_count",
         "destroy": "device.max_count",
     }
+
+    def get_amount(self, request, view):
+        if self.get_action(request, view) == "bulk_create" and isinstance(
+            getattr(request, "data", None),
+            list,
+        ):
+            return len(request.data)
+        return super().get_amount(request, view)
