@@ -1,5 +1,6 @@
 import logging
 
+from common.apps.billing.mixins import QuotaMixin
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
@@ -19,6 +20,7 @@ from rest_framework.response import Response
 from apps.device.constants import DeviceStatus
 from apps.device.filters import SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
+from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
@@ -37,7 +39,7 @@ from apps.device.services.trip_analyzer import TripAnalyzerService
 logger = logging.getLogger(__name__)
 
 
-class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
+class DeviceViewSet(UseTenantFromRequestMixin, QuotaMixin, viewsets.ModelViewSet):
     queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
@@ -45,6 +47,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
+    quota_classes = [DeviceQuota]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -57,7 +60,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
         responses={201: DeviceSerializer(many=True)},
     )
     @action(detail=False, methods=["post"], url_path="bulk-create")
-    def create_multi_device(self, request):
+    def bulk_create(self, request):
         serializer = self.get_serializer(
             data=request.data,
             many=True,
