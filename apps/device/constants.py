@@ -22,4 +22,3 @@ class LocationPoint:
 class DeviceStatus(models.TextChoices):
     ACTIVE = "active"
     IN_INVENTORY = "in_inventory"
-    DEACTIVATED = "deactivated"

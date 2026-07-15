@@ -2,7 +2,6 @@ import logging
 
 from common.apps.billing.mixins import QuotaMixin
 from common.pagination.base_pagination import BasePagination
-from common.utils.console_client import console_client
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
 from django.db import transaction
@@ -13,7 +12,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, mixins, status, views, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ParseError, PermissionDenied
+from rest_framework.exceptions import ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -21,6 +20,7 @@ from rest_framework.response import Response
 from apps.device.constants import DeviceStatus
 from apps.device.filters import SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
+from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
@@ -39,11 +39,7 @@ from apps.device.services.trip_analyzer import TripAnalyzerService
 logger = logging.getLogger(__name__)
 
 
-class DeviceViewSet(
-    UseTenantFromRequestMixin, QuotaMixin, viewsets.ModelViewSet
-):
-    feature = "device.max_count"
-
+class DeviceViewSet(UseTenantFromRequestMixin, QuotaMixin, viewsets.ModelViewSet):
     queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
@@ -51,6 +47,7 @@ class DeviceViewSet(
     ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
+    quota_classes = [DeviceQuota]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -63,52 +60,27 @@ class DeviceViewSet(
         responses={201: DeviceSerializer(many=True)},
     )
     @action(detail=False, methods=["post"], url_path="bulk-create")
-    def create_multi_device(self, request):
-        count = len(request.data) if isinstance(request.data, list) else 1
-        tenant = getattr(request, "tenant", None)
-        org_slug = getattr(tenant, "slug_name", None) if tenant else None
+    def bulk_create(self, request):
+        serializer = self.get_serializer(
+            data=request.data,
+            many=True,
+            context=self.get_serializer_context(),
+        )
 
-        if self.feature and org_slug:
-            reserved, error = console_client.reserve_quota(
-                org_slug, self.feature, count
-            )
-            if not reserved:
-                raise PermissionDenied(error or "Quota exceeded.")
+        serializer.is_valid(raise_exception=False)
+        created_devices = serializer.save()
 
-        try:
-            serializer = self.get_serializer(
-                data=request.data,
-                many=True,
-                context=self.get_serializer_context(),
-            )
+        failed_data = getattr(serializer, "_failed_data", [])
+        total_failed = getattr(serializer, "_total_failed", 0)
 
-            serializer.is_valid(raise_exception=False)
-            created_devices = serializer.save()
-
-            failed_data = getattr(serializer, "_failed_data", [])
-            total_failed = getattr(serializer, "_total_failed", 0)
-
-            return Response(
-                {
-                    "total_created": len(created_devices),
-                    "total_failed": total_failed,
-                    "failed_devices": failed_data,
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception:
-            if self.feature and org_slug:
-                try:
-                    console_client.release_quota(
-                        org_slug, self.feature, count
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.warning(
-                        "release_quota failed for bulk create %s/%s",
-                        org_slug,
-                        self.feature,
-                    )
-            raise
+        return Response(
+            {
+                "total_created": len(created_devices),
+                "total_failed": total_failed,
+                "failed_devices": failed_data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):

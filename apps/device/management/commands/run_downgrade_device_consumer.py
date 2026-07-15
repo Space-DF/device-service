@@ -1,8 +1,8 @@
 """Run the device downgrade consumer."""
+from common.utils.downgrade_consumer import run_downgrade_consumer
 from django.core.management.base import BaseCommand
 
 from apps.device.consumers import deactivate_excess_devices
-from common.utils.downgrade_consumer import run_downgrade_consumer
 
 
 class Command(BaseCommand):

@@ -1,40 +1,48 @@
-"""Device downgrade deactivation logic.
-
-Keeps the oldest ``FREE_PLAN_MAX_DEVICES`` active devices per org
-when a subscription is downgraded to Free. Called by the shared
-downgrade consumer.
-"""
+"""Device downgrade deactivation logic."""
 
 import logging
 
-from apps.device.constants import DeviceStatus
+from django_tenants.utils import schema_context
+
 from apps.device.models import Device, SpaceDevice
 
 logger = logging.getLogger(__name__)
 
-FREE_PLAN_MAX_DEVICES = 10
 
+def deactivate_excess_devices(
+    organization_slug: str, limits: dict = None
+) -> int:
+    limits = limits or {}
+    max_devices = limits.get("device.max_count", 10)
 
-def deactivate_excess_devices(organization_slug: str) -> int:
-    active_device_ids = SpaceDevice.objects.filter(
-        space__slug_name=organization_slug,
-        device__status=DeviceStatus.ACTIVE,
-    ).values_list("device_id", flat=True)
+    with schema_context(organization_slug):
+        active_device_ids = SpaceDevice.objects.filter(
+            space__slug_name=organization_slug,
+            device__is_deactivated=False,
+        ).values_list("device_id", flat=True)
 
-    devices = Device.objects.filter(
-        id__in=active_device_ids,
-        status=DeviceStatus.ACTIVE,
-    ).order_by("created_at")
+        devices = Device.objects.filter(
+            id__in=active_device_ids,
+            is_deactivated=False,
+        ).order_by("created_at")
 
-    excess = devices[FREE_PLAN_MAX_DEVICES:]
-    count = excess.update(status=DeviceStatus.DEACTIVATED)
-    if count:
-        logger.info(
-            "Downgrade: deactivated %s excess devices for org %s "
-            "(kept %s active out of %s total).",
-            count,
-            organization_slug,
-            min(len(devices), FREE_PLAN_MAX_DEVICES),
-            len(devices),
+        excess_ids = list(
+            devices.values_list("id", flat=True)[max_devices:]
         )
-    return count
+        count = (
+            Device.objects.filter(id__in=excess_ids).update(
+                is_deactivated=True
+            )
+            if excess_ids
+            else 0
+        )
+        if count:
+            logger.info(
+                "Downgrade: deactivated %s excess devices for org %s "
+                "(kept %s active out of %s total).",
+                count,
+                organization_slug,
+                min(len(devices), max_devices),
+                len(devices),
+            )
+        return count
