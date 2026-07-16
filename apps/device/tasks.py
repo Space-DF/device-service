@@ -1,6 +1,6 @@
 import logging
 
-from common.celery.tasks import tenant_shared_task
+from common.celery.tasks import task, tenant_shared_task
 from django_tenants.utils import schema_context
 
 from apps.device.models import Device, SpaceDevice
@@ -8,7 +8,12 @@ from apps.device.models import Device, SpaceDevice
 logger = logging.getLogger(__name__)
 
 
-@tenant_shared_task(name="spacedf.tasks.device_downgrade")
+@task(
+    name="spacedf.tasks.device_downgrade",
+    autoretry_for=(Exception,),
+    retry_backoff=2,
+    max_retries=3,
+)
 def device_downgrade_task(**kwargs):
     org_slug = kwargs["org_slug"]
     limits = kwargs.get("limits") or {}
@@ -49,7 +54,12 @@ def device_downgrade_task(**kwargs):
         return count
 
 
-@tenant_shared_task(name="spacedf.tasks.device_upgrade")
+@task(
+    name="spacedf.tasks.device_downgrade",
+    autoretry_for=(Exception,),
+    retry_backoff=2,
+    max_retries=3,
+)
 def device_upgrade_task(**kwargs):
     org_slug = kwargs["org_slug"]
     with schema_context(org_slug):
