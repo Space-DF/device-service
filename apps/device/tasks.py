@@ -55,7 +55,7 @@ def device_downgrade_task(**kwargs):
 
 
 @task(
-    name="spacedf.tasks.device_downgrade",
+    name="spacedf.tasks.device_upgrade",
     autoretry_for=(Exception,),
     retry_backoff=2,
     max_retries=3,
