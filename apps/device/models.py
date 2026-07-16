@@ -24,6 +24,7 @@ class Device(BaseModel):
         choices=DeviceStatus.choices, default=DeviceStatus.IN_INVENTORY
     )
     is_published = models.BooleanField(default=False)
+    is_deactivated = models.BooleanField(default=False)
 
 
 class LorawanDevice(BaseModel):
