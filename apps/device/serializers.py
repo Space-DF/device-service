@@ -124,6 +124,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "status",
             "lorawan_device",
             "is_published",
+            "is_deactivated",
         ]
         list_serializer_class = MultiDeviceSerializer
 
