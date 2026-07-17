@@ -26,15 +26,7 @@ def device_downgrade_task(**kwargs):
         return 0
 
     with schema_context(org_slug):
-        active_device_ids = SpaceDevice.objects.filter(
-            space__slug_name=org_slug,
-            device__is_deactivated=False,
-        ).values_list("device_id", flat=True)
-
-        devices = Device.objects.filter(
-            id__in=active_device_ids,
-            is_deactivated=False,
-        ).order_by("created_at")
+        devices = Device.objects.filter(is_deactivated=False).order_by("created_at")
 
         excess_ids = list(devices.values_list("id", flat=True)[max_devices:])
         count = (
