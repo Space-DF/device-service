@@ -1,5 +1,6 @@
 import logging
 
+from common.apps.billing.constants import FeatureCode
 from common.celery.tasks import tenant_shared_task
 from django_tenants.utils import schema_context
 
@@ -12,11 +13,12 @@ logger = logging.getLogger(__name__)
 def device_downgrade_task(**kwargs):
     org_slug = kwargs["org_slug"]
     limits = kwargs.get("limits") or {}
-    max_devices = limits.get("device.max_count")
+    max_devices = limits.get(FeatureCode.DEVICE_MAX_COUNT)
     if max_devices is None:
         logger.warning(
-            "Skipping device deactivation for %s: device.max_count not in event",
+            "Skipping device deactivation for %s: %s not in event",
             org_slug,
+            FeatureCode.DEVICE_MAX_COUNT,
         )
         return 0
 
