@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 
 
 class DeviceViewSet(
+    QuotaMixin,
     DeactivationMixin,
     UseTenantFromRequestMixin,
-    QuotaMixin,
     viewsets.ModelViewSet,
 ):
     queryset = Device.objects.select_related("lorawan_device", "network_server").all()
@@ -55,6 +55,7 @@ class DeviceViewSet(
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
     quota_classes = [DeviceQuota]
+    deactivation_allowed_methods = ["GET"]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -313,10 +314,9 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         return get_object_or_404(queryset, device_id=device_id)
 
 
-class RetrieveSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
+class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
     serializer_class = SpaceDeviceSerializer
     lookup_field = "device_id"
-    deactivation = ["device", "space"]
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
