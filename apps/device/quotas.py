@@ -19,11 +19,3 @@ class DeviceQuota(BaseQuota):
             "scope": FeatureUsageScope.ORGANIZATION,
         },
     }
-
-    def get_amount(self, request, view):
-        if self.get_action(request, view) == "bulk_create" and isinstance(
-            getattr(request, "data", None),
-            list,
-        ):
-            return len(request.data)
-        return super().get_amount(request, view)

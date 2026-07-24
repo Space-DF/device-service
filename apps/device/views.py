@@ -80,6 +80,9 @@ class DeviceViewSet(
 
         failed_data = getattr(serializer, "_failed_data", [])
         total_failed = getattr(serializer, "_total_failed", 0)
+        if total_failed:
+            for quota in self._quota_instances:
+                quota.release(request, self, amount=total_failed)
 
         return Response(
             {
@@ -272,11 +275,7 @@ class TripViewSet(
         return Response(serializer.data)
 
 
-class DeviceLookupView(
-    DeactivationMixin,
-    UseTenantFromRequestMixin,
-    generics.RetrieveAPIView,
-):
+class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
     swagger_schema = None
     serializer_class = FormatDeviceSerializer
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
@@ -299,7 +298,7 @@ class DeviceLookupView(
             self.get_queryset(),
             lorawan_device__dev_eui=dev_eui,
         )
-        return self.check_deactivated_object(instance)
+        return instance
 
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
