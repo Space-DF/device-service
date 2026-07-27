@@ -199,13 +199,10 @@ class TripViewSet(
         if device and device.deactivated_at:
             filters["created_at__lt"] = device.deactivated_at
 
-        queryset = (
-            Trip.objects.filter(**filters)
-            .select_related(
-                "space_device",
-                "space_device__space",
-                "space_device__device",
-            )
+        queryset = Trip.objects.filter(**filters).select_related(
+            "space_device",
+            "space_device__space",
+            "space_device__device",
         )
 
         if self.action == "retrieve":
@@ -270,8 +267,6 @@ class TripViewSet(
 
         # Get the trips (including any newly created ones)
         queryset = self.filter_queryset(self.get_queryset())
-
-
 
         # List never includes checkpoints
         page = self.paginate_queryset(queryset)
