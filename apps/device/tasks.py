@@ -27,12 +27,16 @@ def device_downgrade_task(**kwargs):
         )
         return 0
 
+    downgraded_at = kwargs.get("downgraded_at")
+
     with schema_context(org_slug):
         devices = Device.objects.filter(is_deactivated=False).order_by("created_at")
 
         excess_ids = list(devices.values_list("id", flat=True)[max_devices:])
         count = (
-            Device.objects.filter(id__in=excess_ids).update(is_deactivated=True)
+            Device.objects.filter(id__in=excess_ids).update(
+                is_deactivated=True, deactivated_at=downgraded_at
+            )
             if excess_ids
             else 0
         )
@@ -57,7 +61,9 @@ def device_downgrade_task(**kwargs):
 def device_upgrade_task(**kwargs):
     org_slug = kwargs["org_slug"]
     with schema_context(org_slug):
-        count = Device.objects.filter(is_deactivated=True).update(is_deactivated=False)
+        count = Device.objects.filter(is_deactivated=True).update(
+            is_deactivated=False, deactivated_at=None
+        )
         if count:
             logger.info(
                 "Renewal: reactivated %s devices for org %s.",

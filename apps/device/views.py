@@ -190,6 +190,15 @@ class TripViewSet(
         space = Space.objects.filter(slug_name=space_slug_name).first()
         self.check_deactivated(space)
 
+        # If device is deactivated, only show trips before deactivation date
+        device = (
+            Device.objects.filter(lorawan_device__dev_eui=self.kwargs.get("dev_eui"))
+            .only("deactivated_at")
+            .first()
+        )
+        if device and device.deactivated_at:
+            filters["created_at__lt"] = device.deactivated_at
+
         queryset = Trip.objects.filter(**filters).select_related(
             "space_device",
             "space_device__space",
