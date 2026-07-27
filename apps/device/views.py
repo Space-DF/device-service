@@ -1,7 +1,6 @@
 import logging
 
 from common.apps.billing.mixins import QuotaMixin
-from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.deactivation import DeactivationMixin
@@ -169,12 +168,10 @@ class DeleteSpaceDeviceViewSet(
 
 
 class TripViewSet(
-    DeactivationMixin,
     mixins.RetrieveModelMixin,
     mixins.ListModelMixin,
     viewsets.GenericViewSet,
 ):
-    deactivation = ["space_device.device", "space_device.space"]
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
@@ -191,8 +188,6 @@ class TripViewSet(
             "space_device__space__slug_name": space_slug_name,
             "space_device__space__is_active": True,
         }
-        space = Space.objects.filter(slug_name=space_slug_name).first()
-        self.check_deactivated(space)
 
         queryset = Trip.objects.filter(**filters).select_related(
             "space_device",
@@ -247,8 +242,6 @@ class TripViewSet(
             )
         except SpaceDevice.DoesNotExist:
             raise ParseError("Device does not exist or is not linked to any space.")
-        self.check_deactivated(space_device.space)
-        self.check_deactivated(space_device.device)
 
         current_trip = (
             Trip.objects.filter(space_device=space_device, is_finished=False)
