@@ -280,11 +280,7 @@ class TripViewSet(
         return Response(serializer.data)
 
 
-class DeviceLookupView(
-    DeactivationMixin,
-    UseTenantFromRequestMixin,
-    generics.RetrieveAPIView,
-):
+class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
     swagger_schema = None
     serializer_class = FormatDeviceSerializer
     queryset = Device.objects.select_related("lorawan_device").prefetch_related(
@@ -303,11 +299,10 @@ class DeviceLookupView(
 
     def get_object(self):
         dev_eui = self.kwargs.get("dev_eui").lower()
-        instance = get_object_or_404(
+        return get_object_or_404(
             self.get_queryset(),
             lorawan_device__dev_eui=dev_eui,
         )
-        return self.check_deactivated_object(instance)
 
 
 class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
