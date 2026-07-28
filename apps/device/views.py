@@ -1,8 +1,10 @@
 import logging
 
-from common.apps.organization.constants import OrganizationTemplate
+from common.apps.billing.mixins import QuotaMixin
+from common.apps.space.models import Space
 from common.pagination.base_pagination import BasePagination
 from common.utils.switch_tenant import UseTenantFromRequestMixin
+from common.views.deactivation import DeactivationMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
@@ -20,6 +22,7 @@ from rest_framework.response import Response
 from apps.device.constants import DeviceStatus
 from apps.device.filters import SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
+from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
     CreateSpaceDeviceSerializer,
     DeviceSerializer,
@@ -38,7 +41,12 @@ from apps.device.services.trip_analyzer import TripAnalyzerService
 logger = logging.getLogger(__name__)
 
 
-class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
+class DeviceViewSet(
+    DeactivationMixin,
+    UseTenantFromRequestMixin,
+    QuotaMixin,
+    viewsets.ModelViewSet,
+):
     queryset = Device.objects.select_related("lorawan_device", "network_server").all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
@@ -46,6 +54,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
     ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
     filterset_fields = ["status"]
+    quota_classes = [DeviceQuota]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
@@ -58,7 +67,7 @@ class DeviceViewSet(UseTenantFromRequestMixin, viewsets.ModelViewSet):
         responses={201: DeviceSerializer(many=True)},
     )
     @action(detail=False, methods=["post"], url_path="bulk-create")
-    def create_multi_device(self, request):
+    def bulk_create(self, request):
         serializer = self.get_serializer(
             data=request.data,
             many=True,
@@ -111,16 +120,8 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         service = SpaceDeviceListService(request)
-        is_smart_fleet_monitor = (
-            getattr(request.tenant, "template", "")
-            == OrganizationTemplate.SMART_FLEET_MONITOR
-        )
-
         queryset = self.filter_queryset(self.get_queryset())
-        if is_smart_fleet_monitor:
-            results = service.get_combined_results(queryset)
-        else:
-            results = queryset
+        results = service.get_combined_results(queryset)
 
         page = self.paginate_queryset(results)
         if page is not None:
@@ -131,7 +132,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         return Response(serializer.data)
 
 
-class FindDeviceByCodeView(views.APIView):
+class FindDeviceByCodeView(DeactivationMixin, views.APIView):
     def get(self, request, *args, **kwargs):
         claim_code = kwargs.get("claim_code")
         device = Device.objects.filter(lorawan_device__claim_code=claim_code).first()
@@ -140,6 +141,7 @@ class FindDeviceByCodeView(views.APIView):
                 {"result": "The device not found in the organization!"},
                 status.HTTP_404_NOT_FOUND,
             )
+        self.check_deactivated(device)
         if device.status != DeviceStatus.IN_INVENTORY:
             return Response(
                 {"result": "The device has been used elsewhere!"},
@@ -148,9 +150,13 @@ class FindDeviceByCodeView(views.APIView):
         return Response(DeviceSerializer(device).data, status=200)
 
 
-class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
+class DeleteSpaceDeviceViewSet(
+    DeactivationMixin,
+    generics.RetrieveUpdateDestroyAPIView,
+):
     lookup_field = "id"
-    queryset = SpaceDevice.objects.all()
+    queryset = SpaceDevice.objects.select_related("device", "space").all()
+    deactivation = ["device", "space"]
 
     def get_serializer_class(self):
         if self.request.method == "GET":
@@ -159,8 +165,12 @@ class DeleteSpaceDeviceViewSet(generics.RetrieveUpdateDestroyAPIView):
 
 
 class TripViewSet(
-    mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
+    DeactivationMixin,
+    mixins.RetrieveModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
 ):
+    deactivation = ["space_device.device", "space_device.space"]
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
     filterset_fields = ["space_device__device_id"]
@@ -177,6 +187,17 @@ class TripViewSet(
             "space_device__space__slug_name": space_slug_name,
             "space_device__space__is_active": True,
         }
+        space = Space.objects.filter(slug_name=space_slug_name).first()
+        self.check_deactivated(space)
+
+        # If device is deactivated, only show trips before deactivation date
+        device = (
+            Device.objects.filter(lorawan_device__dev_eui=self.kwargs.get("dev_eui"))
+            .only("deactivated_at")
+            .first()
+        )
+        if device and device.deactivated_at:
+            filters["created_at__lt"] = device.deactivated_at
 
         queryset = Trip.objects.filter(**filters).select_related(
             "space_device",
@@ -231,6 +252,8 @@ class TripViewSet(
             )
         except SpaceDevice.DoesNotExist:
             raise ParseError("Device does not exist or is not linked to any space.")
+        self.check_deactivated(space_device.space)
+        self.check_deactivated(space_device.device)
 
         current_trip = (
             Trip.objects.filter(space_device=space_device, is_finished=False)
@@ -294,9 +317,10 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         return get_object_or_404(queryset, device_id=device_id)
 
 
-class RetrieveSpaceDeviceView(generics.RetrieveAPIView):
+class RetrieveSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
     serializer_class = SpaceDeviceSerializer
     lookup_field = "device_id"
+    deactivation = ["device", "space"]
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
@@ -322,10 +346,14 @@ class ListPublicSpaceDeviceView(generics.ListAPIView):
 
     def get_queryset(self):
         service = SpaceDeviceListService(self.request)
-        return service.get_public_devices_queryset().order_by("-created_at")
+        return (
+            service.get_public_devices_queryset()
+            .filter(is_deactivated=False)
+            .order_by("-created_at")
+        )
 
 
-class RetrievePublicSpaceDeviceView(generics.RetrieveAPIView):
+class RetrievePublicSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
     serializer_class = SpaceDeviceSerializer
     permission_classes = [AllowAny]
     lookup_field = "id"
@@ -341,6 +369,7 @@ class BulkUpdateSpaceDeviceView(SpaceUpdateAPIView):
     queryset = SpaceDevice.objects.select_related("device", "space", "position").all()
     serializer_class = UpdateSpaceDevicePositionSerializer
     space_field = "space"
+    deactivation = ["device", "space"]
     http_method_names = ["put"]
 
     @swagger_auto_schema(
@@ -366,6 +395,8 @@ class BulkUpdateSpaceDeviceView(SpaceUpdateAPIView):
         ordered_instances = [
             instances[item["id"]] for item in serializer.validated_data
         ]
+        for instance in ordered_instances:
+            self.check_deactivated_object(instance)
 
         with transaction.atomic():
             serializer = self.get_serializer(
