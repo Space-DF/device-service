@@ -116,6 +116,7 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
             "space_slug",
             "is_deactivated",
             "is_published",
+            "cells",
         ]
 
 
@@ -132,6 +133,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "lorawan_device",
             "is_published",
             "is_deactivated",
+            "cells",
         ]
         list_serializer_class = MultiDeviceSerializer
 
