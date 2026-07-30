@@ -14,7 +14,7 @@ from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, mixins, status, views, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ParseError
+from rest_framework.exceptions import ParseError, PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -60,6 +60,15 @@ class DeviceViewSet(
         if self.action in ["list", "retrieve"]:
             return GetDeviceSerializer
         return DeviceSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        if "cells" in request.data and not instance.is_published:
+            raise PermissionDenied(
+                "Cannot configure monitoring cells on unpublished devices."
+            )
+        return super().update(request, partial=partial, *args, **kwargs)
 
     @swagger_auto_schema(
         method="post",

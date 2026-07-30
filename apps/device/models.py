@@ -26,6 +26,7 @@ class Device(BaseModel):
     is_published = models.BooleanField(default=False)
     is_deactivated = models.BooleanField(default=False)
     deactivated_at = models.DateTimeField(null=True, blank=True)
+    cells = models.JSONField(default=list, blank=True)
 
 
 class LorawanDevice(BaseModel):
