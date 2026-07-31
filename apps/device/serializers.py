@@ -24,6 +24,11 @@ from apps.placement.serializers import PositionSerializer
 logger = logging.getLogger(__name__)
 
 
+def _resolve_entity_properties(obj, org_slug):
+    device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
+    return EntityPropertiesService().get_entity_properties(device_id, org_slug)
+
+
 class LorawanDeviceSerializer(serializers.ModelSerializer):
     dev_eui = HexCharField(length=16, unique=True)
     join_eui = HexCharField(length=16)
@@ -138,8 +143,12 @@ class DeviceSerializer(serializers.ModelSerializer):
         list_serializer_class = MultiDeviceSerializer
 
     def to_representation(self, instance):
+        telemetry_data = _resolve_entity_properties(
+            instance, self.context.get("org_slug")
+        )
         data = super().to_representation(instance)
         device_profile = None
+
         if instance.device_model:
             try:
                 client = TranformerServiceClient()
@@ -150,6 +159,7 @@ class DeviceSerializer(serializers.ModelSerializer):
                     exc_info=True,
                 )
         data["device_profile"] = device_profile
+        data["device_properties"] = telemetry_data["device_properties"]
         return data
 
     def create(self, validated_data):
@@ -263,14 +273,14 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return self._to_public_representation(instance)
 
         data = super().to_representation(instance)
-        telemetry_data = self._get_entity_properties(instance)
+        telemetry_data = _resolve_entity_properties(instance, self.organization_slug)
         data["device_properties"] = telemetry_data["device_properties"]
         data["entities"] = telemetry_data["entities"]
         return data
 
     def _to_public_representation(self, instance: Device) -> dict:
         device_id = str(instance.id)
-        telemetry_data = self._get_entity_properties(instance)
+        telemetry_data = _resolve_entity_properties(instance, self.organization_slug)
 
         return {
             "id": device_id,
@@ -279,13 +289,6 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             "device_properties": telemetry_data["device_properties"],
             "entities": telemetry_data["entities"],
         }
-
-    def _get_entity_properties(self, obj: SpaceDevice | Device) -> dict:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        return EntityPropertiesService().get_entity_properties(
-            device_id,
-            self.organization_slug,
-        )
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
