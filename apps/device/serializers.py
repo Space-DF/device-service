@@ -143,12 +143,8 @@ class DeviceSerializer(serializers.ModelSerializer):
         list_serializer_class = MultiDeviceSerializer
 
     def to_representation(self, instance):
-        telemetry_data = _resolve_entity_properties(
-            instance, self.context.get("org_slug")
-        )
         data = super().to_representation(instance)
         device_profile = None
-
         if instance.device_model:
             try:
                 client = TranformerServiceClient()
@@ -159,7 +155,6 @@ class DeviceSerializer(serializers.ModelSerializer):
                     exc_info=True,
                 )
         data["device_profile"] = device_profile
-        data["device_properties"] = telemetry_data["device_properties"]
         return data
 
     def create(self, validated_data):
@@ -220,6 +215,15 @@ class GetDeviceSerializer(DeviceSerializer):
     class Meta(DeviceSerializer.Meta):
         model = Device
         fields = "__all__"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None)
+        organization_slug = getattr(tenant, "slug_name", "")
+        telemetry_data = _resolve_entity_properties(instance, organization_slug)
+        data["device_properties"] = telemetry_data["device_properties"]
+        return data
 
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):
