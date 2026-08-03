@@ -1,6 +1,7 @@
 import logging
 
 from common.apps.billing.constants import FeatureCode
+from common.celery.task_senders import send_task
 from common.celery.tasks import task, tenant_shared_task
 from django_tenants.utils import schema_context
 
@@ -49,7 +50,18 @@ def device_downgrade_task(**kwargs):
                 min(devices.count(), max_devices),
                 devices.count(),
             )
-        return count
+
+    # Keep outside the schema_context - send_task is broker-only,
+    # No DB access needed.
+    if excess_ids:
+        send_task(
+            name="entity_downgrade",
+            message={
+                "org_slug": org_slug,
+                "device_ids": [str(device_id) for device_id in excess_ids],
+            },
+        )
+    return count
 
 
 @task(
@@ -61,8 +73,15 @@ def device_downgrade_task(**kwargs):
 def device_upgrade_task(**kwargs):
     org_slug = kwargs["org_slug"]
     with schema_context(org_slug):
-        count = Device.objects.filter(is_deactivated=True).update(
-            is_deactivated=False, deactivated_at=None
+        reactivated_ids = list(
+            Device.objects.filter(is_deactivated=True).values_list("id", flat=True)
+        )
+        count = (
+            Device.objects.filter(id__in=reactivated_ids).update(
+                is_deactivated=False, deactivated_at=None
+            )
+            if reactivated_ids
+            else 0
         )
         if count:
             logger.info(
@@ -70,7 +89,17 @@ def device_upgrade_task(**kwargs):
                 count,
                 org_slug,
             )
-        return count
+
+    # Cascade reactivation to telemetry entities.
+    if count:
+        send_task(
+            name="entity_upgrade",
+            message={
+                "org_slug": org_slug,
+                "device_ids": [str(device_id) for device_id in reactivated_ids],
+            },
+        )
+    return count
 
 
 @tenant_shared_task(name="spacedf.tasks.update_device_location")
