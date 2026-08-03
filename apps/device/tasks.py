@@ -9,6 +9,9 @@ from apps.device.models import Device, SpaceDevice
 
 logger = logging.getLogger(__name__)
 
+TELEMETRY_EVENT_ENTITIES_DEACTIVATED = "entities_deactivated"
+TELEMETRY_EVENT_ENTITIES_REACTIVATED = "entities_reactivated"
+
 
 @task(
     name="spacedf.tasks.device_downgrade",
@@ -55,8 +58,9 @@ def device_downgrade_task(**kwargs):
     # No DB access needed.
     if excess_ids:
         send_task(
-            name="entity_downgrade",
+            name="telemetry_subscription_downgrade",
             message={
+                "event": TELEMETRY_EVENT_ENTITIES_DEACTIVATED,
                 "org_slug": org_slug,
                 "device_ids": [str(device_id) for device_id in excess_ids],
             },
@@ -93,8 +97,9 @@ def device_upgrade_task(**kwargs):
     # Cascade reactivation to telemetry entities.
     if count:
         send_task(
-            name="entity_upgrade",
+            name="telemetry_subscription_upgrade",
             message={
+                "event": TELEMETRY_EVENT_ENTITIES_REACTIVATED,
                 "org_slug": org_slug,
                 "device_ids": [str(device_id) for device_id in reactivated_ids],
             },
