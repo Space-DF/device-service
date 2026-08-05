@@ -27,7 +27,20 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 
 setup_organization_task_routing()
 setup_synchronous_model_task_routing()
-setup_subscription_task_routing(["device_downgrade", "device_upgrade"])
+setup_subscription_task_routing(
+    [
+        {
+            "task_name": "device_downgrade",
+            "service": "device",
+            "lifecycle": "downgrade",
+        },
+        {
+            "task_name": "device_upgrade",
+            "service": "device",
+            "lifecycle": "upgrade",
+        },
+    ]
+)
 
 # Register queue for receiving location updates from transformer-service
 if app.conf.task_queues is None:
