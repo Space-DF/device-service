@@ -27,9 +27,9 @@ class SpaceDeviceFilter(django_filters.FilterSet):
             )
 
         return queryset.filter(
-            Q(location__isnull=False),
-            Q(location__longitude__gte=west),
-            Q(location__longitude__lte=east),
-            Q(location__latitude__gte=south),
-            Q(location__latitude__lte=north),
+            Q(device__location__isnull=False),
+            Q(device__location__longitude__gte=west),
+            Q(device__location__longitude__lte=east),
+            Q(device__location__latitude__gte=south),
+            Q(device__location__latitude__lte=north),
         )

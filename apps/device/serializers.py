@@ -108,9 +108,15 @@ class MultiDeviceSerializer(serializers.ListSerializer):
         return device_objs
 
 
+class LocationSerializer(serializers.Serializer):
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+
+
 class FormatDeviceSerializer(serializers.ModelSerializer):
     device_id = serializers.UUIDField(read_only=True, source="lorawan_device.id")
     space_slug = serializers.CharField()
+    location = LocationSerializer(read_only=True)
 
     class Meta:
         model = Device
@@ -122,11 +128,13 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
             "is_deactivated",
             "is_published",
             "cells",
+            "location",
         ]
 
 
 class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
+    location = LocationSerializer(required=False, allow_null=True)
 
     class Meta:
         model = Device
@@ -139,7 +147,13 @@ class DeviceSerializer(serializers.ModelSerializer):
             "is_published",
             "is_deactivated",
             "cells",
+            "location",
         ]
+        extra_kwargs = {
+            "id": {"read_only": True},
+            "status": {"read_only": True},
+            "is_deactivated": {"read_only": True},
+        }
         list_serializer_class = MultiDeviceSerializer
 
     def to_representation(self, instance):

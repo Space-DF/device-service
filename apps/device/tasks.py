@@ -4,7 +4,7 @@ from common.apps.billing.constants import FeatureCode
 from common.celery.tasks import task, tenant_shared_task
 from django_tenants.utils import schema_context
 
-from apps.device.models import Device, SpaceDevice
+from apps.device.models import Device
 
 logger = logging.getLogger(__name__)
 
@@ -76,15 +76,15 @@ def device_upgrade_task(**kwargs):
 @tenant_shared_task(name="spacedf.tasks.update_device_location")
 def update_device_location(device_id: str, latitude: float, longitude: float):
     try:
-        space_device = SpaceDevice.objects.get(device_id=device_id)
-    except SpaceDevice.DoesNotExist:
+        device = Device.objects.get(id=device_id)
+    except Device.DoesNotExist:
         logger.warning(
-            f"SpaceDevice with device_id={device_id} not found, skipping location update"
+            f"Device with id={device_id} not found, skipping location update"
         )
         return
 
-    space_device.location = {
+    device.location = {
         "latitude": latitude,
         "longitude": longitude,
     }
-    space_device.save(update_fields=["location", "updated_at"])
+    device.save(update_fields=["location", "updated_at"])
