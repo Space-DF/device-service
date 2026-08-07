@@ -1,7 +1,6 @@
 import logging
 
 from common.apps.billing.constants import FeatureCode
-from common.celery.constants import TELEMETRY_SUBSCRIPTION_EVENT_ENTITIES
 from common.celery.task_senders import send_subscription_task
 from common.celery.tasks import PermanentTaskError, task, tenant_shared_task
 from django.utils.dateparse import parse_datetime
@@ -77,7 +76,6 @@ def device_downgrade_task(**kwargs):
             lifecycle="downgrade",
             task_name="telemetry_downgrade",
             message={
-                "event": TELEMETRY_SUBSCRIPTION_EVENT_ENTITIES,
                 "org_slug": org_slug,
                 "device_ids": [str(device_id) for device_id in excess_ids],
             },
@@ -139,7 +137,6 @@ def device_upgrade_task(**kwargs):
             lifecycle="upgrade",
             task_name="telemetry_upgrade",
             message={
-                "event": TELEMETRY_SUBSCRIPTION_EVENT_ENTITIES,
                 "org_slug": org_slug,
                 "device_ids": [str(device_id) for device_id in reactivated_ids],
             },
