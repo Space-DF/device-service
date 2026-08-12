@@ -1,3 +1,4 @@
+from apps.device.models import Device
 from apps.device.services.entity_properties_service import EntityPropertiesService
 
 
@@ -24,3 +25,12 @@ def _entity_properties_context(context, items, organization_slug):
 def _organization_slug(request):
     tenant = getattr(request, "tenant", None)
     return getattr(tenant, "slug_name", "") or ""
+
+
+def _resolve_entity_properties_from_context(context, obj, org_slug):
+    device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
+    properties_by_device_id = context.get("entity_properties_by_device_id", {})
+    return properties_by_device_id.get(
+        device_id,
+        {"device_properties": None, "entities": []},
+    )

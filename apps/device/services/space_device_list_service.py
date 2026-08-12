@@ -1,4 +1,3 @@
-from apps.device.filters import resolve_device_type_filter
 from apps.device.models import Device
 
 
@@ -17,14 +16,6 @@ class SpaceDeviceListService:
         device_id = self.request.query_params.get("device_id")
         if device_id:
             public_filters["id"] = device_id
-
-        model_ids = resolve_device_type_filter(
-            self.request.query_params.get("device_type")
-        )
-        if model_ids is not None:
-            if not model_ids:
-                return Device.objects.none()
-            public_filters["device_model__in"] = model_ids
 
         public_devices = Device.objects.select_related("lorawan_device").filter(
             **public_filters

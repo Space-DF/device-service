@@ -20,7 +20,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.device.constants import DeviceStatus
-from apps.device.filters import SpaceDeviceFilter, resolve_device_type_filter
+from apps.device.filters import DeviceFilter, SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
@@ -58,7 +58,7 @@ class DeviceViewSet(
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
-    filterset_fields = ["status"]
+    filterset_class = DeviceFilter
     quota_classes = [DeviceQuota]
 
     def get_serializer_class(self):
@@ -77,19 +77,6 @@ class DeviceViewSet(
                 _organization_slug(self.request),
             )
         return super().get_serializer(*args, **kwargs)
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        model_ids = resolve_device_type_filter(
-            self.request.query_params.get("device_type")
-        )
-        if model_ids is not None:
-            if not model_ids:
-                queryset = queryset.none()
-            else:
-                queryset = queryset.filter(device_model__in=model_ids)
-
-        return queryset
 
     @swagger_auto_schema(
         method="post",
