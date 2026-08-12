@@ -8,12 +8,14 @@ from apps.device.services.device_profile_resolver import resolve_device_type_fil
 class SpaceDeviceFilter(django_filters.FilterSet):
     bbox = django_filters.CharFilter(method="filter_bbox")
     device_type = django_filters.CharFilter(method="filter_device_type")
+    location = django_filters.BooleanFilter(method="filter_location")
 
     class Meta:
         model = SpaceDevice
         fields = [
             "bbox",
             "device_type",
+            "location",
             "device_id",
             "building_id",
             "floor_id",
@@ -44,3 +46,6 @@ class SpaceDeviceFilter(django_filters.FilterSet):
         if not model_ids:
             return queryset.none()
         return queryset.filter(device__device_model__in=model_ids)
+
+    def filter_location(self, queryset, name, value):
+        return queryset.filter(device__location__isnull=not value)
