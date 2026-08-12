@@ -2,15 +2,18 @@ import django_filters
 from django.db.models import Q
 
 from apps.device.models import SpaceDevice
+from apps.device.services.device_profile_resolver import resolve_device_type_filter
 
 
 class SpaceDeviceFilter(django_filters.FilterSet):
     bbox = django_filters.CharFilter(method="filter_bbox")
+    device_type = django_filters.CharFilter(method="filter_device_type")
 
     class Meta:
         model = SpaceDevice
         fields = [
             "bbox",
+            "device_type",
             "device_id",
             "building_id",
             "floor_id",
@@ -33,3 +36,11 @@ class SpaceDeviceFilter(django_filters.FilterSet):
             Q(device__location__latitude__gte=south),
             Q(device__location__latitude__lte=north),
         )
+
+    def filter_device_type(self, queryset, name, value):
+        model_ids = resolve_device_type_filter(value)
+        if model_ids is None:
+            return queryset
+        if not model_ids:
+            return queryset.none()
+        return queryset.filter(device__device_model__in=model_ids)

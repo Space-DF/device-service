@@ -10,26 +10,26 @@ class EntityPropertiesService:
     def __init__(self, telemetry_client: TelemetryServiceClient | None = None):
         self.telemetry_client = telemetry_client or TelemetryServiceClient()
 
-    def get_entity_properties(
+    def get_entity_properties_batch(
         self,
-        device_id: str,
+        device_ids: set[str],
         organization_slug: str,
-    ) -> dict:
+    ) -> dict[str, dict]:
         try:
-            entities = self.telemetry_client.get_entity_properties(
-                device_id,
+            entities_by_device_id = self.telemetry_client.get_entity_properties_batch(
+                list(device_ids),
                 organization_slug,
             )
             return {
-                "entities": entities or [],
-                "device_properties": self._build_device_properties(entities or []),
+                device_id: {
+                    "entities": entities or [],
+                    "device_properties": self._build_device_properties(entities or []),
+                }
+                for device_id, entities in entities_by_device_id.items()
             }
         except Exception:
-            logger.exception(
-                "Error fetching device entity properties for device %s",
-                device_id,
-            )
-            return {"device_properties": None, "entities": []}
+            logger.exception("Error fetching batch device entity properties")
+            return {}
 
     def _build_device_properties(self, entities: list[dict]) -> dict | None:
         device_properties: dict[str, Any] = {}
