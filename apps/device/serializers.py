@@ -13,6 +13,9 @@ from apps.building.serializers import (
 )
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.device.services.entity_properties_context import (
+    _resolve_entity_properties_from_context,
+)
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
@@ -20,15 +23,6 @@ from apps.placement.models import Position
 from apps.placement.serializers import PositionSerializer
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_entity_properties_from_context(context, obj, org_slug):
-    device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-    properties_by_device_id = context.get("entity_properties_by_device_id", {})
-    return properties_by_device_id.get(
-        device_id,
-        {"device_properties": None, "entities": []},
-    )
 
 
 class LorawanDeviceSerializer(serializers.ModelSerializer):

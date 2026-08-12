@@ -25,33 +25,23 @@ def get_device_model_ids(items):
     return device_model_ids
 
 
-def profile_matches_device_type(profile, value):
-    normalized = value.lower()
-    candidates = [
-        profile.get("id"),
-        profile.get("device_type"),
-        profile.get("key_feature"),
-        profile.get("name"),
-    ]
-    candidates.extend(profile.get("aliases", []))
-    return any(
-        str(candidate or "").strip().lower() == normalized for candidate in candidates
-    )
+def profile_matches_key_feature(profile, value):
+    return str(profile.get("key_feature") or "").strip() == str(value or "").strip()
 
 
 @lru_cache(maxsize=256)
-def find_device_model_ids(value, device_model_ids):
+def find_device_model_ids_by_key_feature(value, device_model_ids):
     matched_ids = []
     profiles = TranformerServiceClient().get_device_profiles_by_model_ids(
         device_model_ids
     )
     for device_model_id, profile in profiles.items():
-        if profile_matches_device_type(profile, value):
+        if profile_matches_key_feature(profile, value):
             matched_ids.append(device_model_id)
     return tuple(matched_ids)
 
 
-def resolve_device_type_filter(value):
+def resolve_key_feature_filter(value):
     raw_value = str(value or "").strip()
     if not raw_value:
         return None
@@ -70,4 +60,4 @@ def resolve_device_type_filter(value):
         .values_list("device_model", flat=True)
         .distinct()
     )
-    return list(find_device_model_ids(raw_value, device_model_ids))
+    return list(find_device_model_ids_by_key_feature(raw_value, device_model_ids))
