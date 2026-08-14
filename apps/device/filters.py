@@ -1,7 +1,33 @@
 import django_filters
 from django.db.models import Q
 
-from apps.device.models import SpaceDevice
+from apps.device.models import Device, SpaceDevice
+from apps.device.services.device_profile_resolver import resolve_key_feature_filter
+
+
+class DeviceFilter(django_filters.FilterSet):
+    location = django_filters.BooleanFilter(method="filter_location")
+    key_feature = django_filters.CharFilter(method="filter_key_feature")
+
+    class Meta:
+        model = Device
+        fields = [
+            "status",
+            "location",
+            "key_feature",
+            "is_published",
+        ]
+
+    def filter_location(self, queryset, name, value):
+        return queryset.filter(location__isnull=not value)
+
+    def filter_key_feature(self, queryset, name, value):
+        model_ids = resolve_key_feature_filter(value)
+        if model_ids is None:
+            return queryset
+        if not model_ids:
+            return queryset.none()
+        return queryset.filter(device_model__in=model_ids)
 
 
 class SpaceDeviceFilter(django_filters.FilterSet):
@@ -27,9 +53,9 @@ class SpaceDeviceFilter(django_filters.FilterSet):
             )
 
         return queryset.filter(
-            Q(location__isnull=False),
-            Q(location__longitude__gte=west),
-            Q(location__longitude__lte=east),
-            Q(location__latitude__gte=south),
-            Q(location__latitude__lte=north),
+            Q(device__location__isnull=False),
+            Q(device__location__longitude__gte=west),
+            Q(device__location__longitude__lte=east),
+            Q(device__location__latitude__gte=south),
+            Q(device__location__latitude__lte=north),
         )

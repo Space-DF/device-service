@@ -2,7 +2,6 @@ import logging
 from functools import cached_property
 
 from common.utils.custom_fields import HexCharField
-from common.utils.tranformer_client import TranformerServiceClient
 from django.db import transaction
 from rest_framework import serializers
 
@@ -14,7 +13,9 @@ from apps.building.serializers import (
 )
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
-from apps.device.services.entity_properties_service import EntityPropertiesService
+from apps.device.services.entity_properties_context import (
+    _resolve_entity_properties_from_context,
+)
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.serializers import NetworkServerSerializer
@@ -103,9 +104,15 @@ class MultiDeviceSerializer(serializers.ListSerializer):
         return device_objs
 
 
+class LocationSerializer(serializers.Serializer):
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+
+
 class FormatDeviceSerializer(serializers.ModelSerializer):
     device_id = serializers.UUIDField(read_only=True, source="lorawan_device.id")
     space_slug = serializers.CharField()
+    location = LocationSerializer(read_only=True)
 
     class Meta:
         model = Device
@@ -116,11 +123,14 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
             "space_slug",
             "is_deactivated",
             "is_published",
+            "cells",
+            "location",
         ]
 
 
 class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
+    location = LocationSerializer(required=False, allow_null=True)
 
     class Meta:
         model = Device
@@ -132,16 +142,24 @@ class DeviceSerializer(serializers.ModelSerializer):
             "lorawan_device",
             "is_published",
             "is_deactivated",
+            "cells",
+            "location",
         ]
+        extra_kwargs = {
+            "id": {"read_only": True},
+            "status": {"read_only": True},
+            "is_deactivated": {"read_only": True},
+        }
         list_serializer_class = MultiDeviceSerializer
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         device_profile = None
         if instance.device_model:
+            device_model_id = str(instance.device_model)
+            profiles_by_model_id = self.context.get("device_profiles_by_model_id", {})
             try:
-                client = TranformerServiceClient()
-                device_profile = client.get_device_model(str(instance.device_model))
+                device_profile = profiles_by_model_id.get(device_model_id)
             except Exception as e:
                 logger.error(
                     f"Failed to fetch device model for {instance.id}: {str(e)}",
@@ -209,6 +227,19 @@ class GetDeviceSerializer(DeviceSerializer):
         model = Device
         fields = "__all__"
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None)
+        organization_slug = getattr(tenant, "slug_name", "")
+        telemetry_data = _resolve_entity_properties_from_context(
+            self.context,
+            instance,
+            organization_slug,
+        )
+        data["device_properties"] = telemetry_data["device_properties"]
+        return data
+
 
 class SpaceDeviceSerializer(serializers.ModelSerializer):
     device = DeviceSerializer(read_only=True)
@@ -261,14 +292,22 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             return self._to_public_representation(instance)
 
         data = super().to_representation(instance)
-        telemetry_data = self._get_entity_properties(instance)
+        telemetry_data = _resolve_entity_properties_from_context(
+            self.context,
+            instance,
+            self.organization_slug,
+        )
         data["device_properties"] = telemetry_data["device_properties"]
         data["entities"] = telemetry_data["entities"]
         return data
 
     def _to_public_representation(self, instance: Device) -> dict:
         device_id = str(instance.id)
-        telemetry_data = self._get_entity_properties(instance)
+        telemetry_data = _resolve_entity_properties_from_context(
+            self.context,
+            instance,
+            self.organization_slug,
+        )
 
         return {
             "id": device_id,
@@ -277,13 +316,6 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
             "device_properties": telemetry_data["device_properties"],
             "entities": telemetry_data["entities"],
         }
-
-    def _get_entity_properties(self, obj: SpaceDevice | Device) -> dict:
-        device_id = str(obj.id) if isinstance(obj, Device) else str(obj.device_id)
-        return EntityPropertiesService().get_entity_properties(
-            device_id,
-            self.organization_slug,
-        )
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):

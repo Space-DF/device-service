@@ -20,7 +20,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.device.constants import DeviceStatus
-from apps.device.filters import SpaceDeviceFilter
+from apps.device.filters import DeviceFilter, SpaceDeviceFilter
 from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
@@ -34,6 +34,11 @@ from apps.device.serializers import (
     TripListSerializer,
     UpdateSpaceDevicePositionSerializer,
     UpdateSpaceDeviceSerializer,
+)
+from apps.device.services.device_profile_resolver import get_device_profile_context
+from apps.device.services.entity_properties_context import (
+    _entity_properties_context,
+    _organization_slug,
 )
 from apps.device.services.space_device_list_service import SpaceDeviceListService
 from apps.device.services.trip_analyzer import TripAnalyzerService
@@ -53,13 +58,25 @@ class DeviceViewSet(
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
     search_fields = ["lorawan_device__dev_eui"]
-    filterset_fields = ["status"]
+    filterset_class = DeviceFilter
     quota_classes = [DeviceQuota]
 
     def get_serializer_class(self):
         if self.action in ["list", "retrieve"]:
             return GetDeviceSerializer
         return DeviceSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        if self.action in ["list", "retrieve"] and args:
+            items = args[0] if kwargs.get("many", False) else [args[0]]
+            context = kwargs.get("context", self.get_serializer_context())
+            context = get_device_profile_context(context, items)
+            kwargs["context"] = _entity_properties_context(
+                context,
+                items,
+                _organization_slug(self.request),
+            )
+        return super().get_serializer(*args, **kwargs)
 
     @swagger_auto_schema(
         method="post",
@@ -125,10 +142,30 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
 
         page = self.paginate_queryset(results)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            context = get_device_profile_context(self.get_serializer_context(), page)
+            context = _entity_properties_context(
+                context,
+                page,
+                _organization_slug(request),
+            )
+            serializer = self.get_serializer(
+                page,
+                many=True,
+                context=context,
+            )
             return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(results, many=True)
+        context = get_device_profile_context(self.get_serializer_context(), results)
+        context = _entity_properties_context(
+            context,
+            results,
+            _organization_slug(request),
+        )
+        serializer = self.get_serializer(
+            results,
+            many=True,
+            context=context,
+        )
         return Response(serializer.data)
 
 
@@ -147,7 +184,17 @@ class FindDeviceByCodeView(DeactivationMixin, views.APIView):
                 {"result": "The device has been used elsewhere!"},
                 status.HTTP_400_BAD_REQUEST,
             )
-        return Response(DeviceSerializer(device).data, status=200)
+        return Response(
+            DeviceSerializer(
+                device,
+                context=_entity_properties_context(
+                    get_device_profile_context({}, [device]),
+                    [device],
+                    _organization_slug(request),
+                ),
+            ).data,
+            status=200,
+        )
 
 
 class DeleteSpaceDeviceViewSet(

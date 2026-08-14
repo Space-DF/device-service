@@ -26,6 +26,12 @@ class Device(BaseModel):
     is_published = models.BooleanField(default=False)
     is_deactivated = models.BooleanField(default=False)
     deactivated_at = models.DateTimeField(null=True, blank=True)
+    cells = models.JSONField(default=list, blank=True)
+    location = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Location as JSON: {"latitude": <float>, "longitude": <float>}',
+    )
 
 
 class LorawanDevice(BaseModel):
@@ -83,11 +89,6 @@ class SpaceDevice(BaseModel):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-    )
-    location = models.JSONField(
-        null=True,
-        blank=True,
-        help_text='Location as JSON: {"latitude": <float>, "longitude": <float>}',
     )
 
     class Meta:
