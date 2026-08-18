@@ -6,7 +6,7 @@ gevent==24.2.1
 django_tenants==3.6.1
 celery==5.4.0
 cryptography==50.0.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 
 # For the persistence stores
 psycopg2-binary==2.9.9
