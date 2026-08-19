@@ -107,6 +107,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 class LocationSerializer(serializers.Serializer):
     latitude = serializers.FloatField()
     longitude = serializers.FloatField()
+    bearing = serializers.FloatField(required=False, allow_null=True)
 
 
 class FormatDeviceSerializer(serializers.ModelSerializer):
