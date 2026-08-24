@@ -12,12 +12,14 @@ from apps.building.serializers import (
     FloorSerializer,
 )
 from apps.device.constants import DeviceStatus
-from apps.device.models import Device, LorawanDevice, SpaceDevice, Trip
+from apps.device.models import APIDevice, Device, LorawanDevice, SpaceDevice, Trip
 from apps.device.services.entity_properties_context import (
     _resolve_entity_properties_from_context,
 )
+from apps.device.services.nested_device_handlers import get_nested_device_handlers
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
+from apps.network_server.models import NetworkServer
 from apps.network_server.serializers import NetworkServerSerializer
 from apps.placement.models import Position
 from apps.placement.serializers import PositionSerializer
@@ -29,42 +31,63 @@ class LorawanDeviceSerializer(serializers.ModelSerializer):
     dev_eui = HexCharField(length=16, unique=True)
     join_eui = HexCharField(length=16)
     app_key = HexCharField(length=32)
+    network_server = serializers.PrimaryKeyRelatedField(
+        queryset=NetworkServer.objects.all()
+    )
 
     class Meta:
         model = LorawanDevice
-        fields = ["join_eui", "dev_eui", "app_key", "claim_code"]
+        fields = ["join_eui", "dev_eui", "app_key", "network_server"]
+
+
+class ReadLorawanDeviceSerializer(LorawanDeviceSerializer):
+    network_server = NetworkServerSerializer(read_only=True)
+
+
+class APIDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = APIDevice
+        fields = ["serial_number"]
 
 
 class MultiDeviceSerializer(serializers.ListSerializer):
     def to_internal_value(self, data):
+        handlers = get_nested_device_handlers()
         valid_items = []
         duplicated = []
         validation_error = []
-        request_dev_euis = set()
-
-        existing_dev_euis = set(
-            LorawanDevice.objects.filter(
-                dev_eui__in=[
-                    item.get("lorawan_device", {}).get("dev_eui") for item in data
-                ]
-            ).values_list("dev_eui", flat=True)
-        )
+        request_identifiers = {handler.relation: set() for handler in handlers}
+        existing_identifiers = {
+            handler.relation: handler.existing_identifiers(
+                self._handler_identifiers(handler, data)
+            )
+            for handler in handlers
+        }
 
         for item in data:
-            lorawan_device = item.get("lorawan_device") or {}
-            dev_eui = lorawan_device.get("dev_eui")
+            identifiers = {
+                handler.relation: handler.identifier(item)
+                for handler in handlers
+                if handler.identifier(item)
+            }
+            primary_identifier = next(iter(identifiers.values()), None)
 
-            if not dev_eui:
-                validation_error.append(dev_eui)
+            if not identifiers:
+                validation_error.append(None)
                 continue
 
-            if dev_eui in request_dev_euis:
-                duplicated.append(dev_eui)
-                continue
-
-            request_dev_euis.add(dev_eui)
-            if dev_eui in existing_dev_euis:
-                duplicated.append(dev_eui)
+            has_duplicate = False
+            for relation, identifier in identifiers.items():
+                if identifier in request_identifiers[relation]:
+                    duplicated.append(identifier)
+                    has_duplicate = True
+                    break
+                if identifier in existing_identifiers[relation]:
+                    duplicated.append(identifier)
+                    has_duplicate = True
+                    break
+                request_identifiers[relation].add(identifier)
+            if has_duplicate:
                 continue
 
             serializer = self.child.__class__(
@@ -76,7 +99,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
                 valid_items.append(serializer.validated_data)
                 continue
 
-            validation_error.append(dev_eui)
+            validation_error.append(primary_identifier)
 
         self._total_failed = len(duplicated) + len(validation_error)
         self._failed_data = {
@@ -86,20 +109,37 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 
         return valid_items
 
+    def _handler_identifiers(self, handler, items):
+        identifiers = []
+        for item in items:
+            identifier = handler.identifier(item)
+            if identifier:
+                identifiers.append(identifier)
+        return identifiers
+
     @transaction.atomic
     def create(self, validated_data):
+        handlers = get_nested_device_handlers()
         device_objs = []
-        lorawan_objs = []
+        nested_objs = {handler.relation: [] for handler in handlers}
 
         for item in validated_data:
-            lorawan_data = item.pop("lorawan_device", None)
+            nested_data = {
+                handler.relation: handler.pop_data(item) for handler in handlers
+            }
             device_obj = Device(**item)
-            lorawan_obj = LorawanDevice(device=device_obj, **lorawan_data)
             device_objs.append(device_obj)
-            lorawan_objs.append(lorawan_obj)
+            for handler in handlers:
+                data = nested_data.get(handler.relation)
+                if data:
+                    nested_objs[handler.relation].append(
+                        handler.build_instance(device_obj, data)
+                    )
 
         Device.objects.bulk_create(device_objs)
-        LorawanDevice.objects.bulk_create(lorawan_objs)
+        for handler in handlers:
+            if nested_objs[handler.relation]:
+                handler.model_class.objects.bulk_create(nested_objs[handler.relation])
 
         return device_objs
 
@@ -131,16 +171,18 @@ class FormatDeviceSerializer(serializers.ModelSerializer):
 
 class DeviceSerializer(serializers.ModelSerializer):
     lorawan_device = LorawanDeviceSerializer(many=False, required=False)
+    api_device = APIDeviceSerializer(many=False, required=False)
     location = LocationSerializer(required=False, allow_null=True)
 
     class Meta:
         model = Device
         fields = [
             "id",
-            "network_server",
             "device_model",
+            "claim_code",
             "status",
             "lorawan_device",
+            "api_device",
             "is_published",
             "is_deactivated",
             "cells",
@@ -170,14 +212,18 @@ class DeviceSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lorawan_data = validated_data.pop("lorawan_device", None)
+        handlers = get_nested_device_handlers()
+        nested_data = {
+            handler.relation: handler.pop_data(validated_data) for handler in handlers
+        }
         try:
             device = Device.objects.create(**validated_data)
             logger.info(f"Device created successfully with ID: {device.id}")
 
-            if lorawan_data:
-                LorawanDevice.objects.create(device=device, **lorawan_data)
-                logger.info(f"LoRaWAN device created for device {device.id}")
+            for handler in handlers:
+                handler.create(device, nested_data.get(handler.relation))
+                if nested_data.get(handler.relation):
+                    logger.info(f"{handler.label} created for device {device.id}")
 
             return device
         except Exception as e:
@@ -185,44 +231,29 @@ class DeviceSerializer(serializers.ModelSerializer):
             raise
 
     def update(self, instance, validated_data):
-        lorawan_data = validated_data.pop("lorawan_device", None)
-
+        handlers = get_nested_device_handlers()
+        nested_data = {
+            handler.relation: handler.pop_data(validated_data) for handler in handlers
+        }
         try:
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
-            logger.info(f"Device {instance.id} updated successfully")
-        except Exception as e:
-            logger.error(
-                f"Failed to update device {instance.id}: {str(e)}", exc_info=True
-            )
+            with transaction.atomic():
+                for attr, value in validated_data.items():
+                    setattr(instance, attr, value)
+                instance.save()
+                for handler in handlers:
+                    data = nested_data.get(handler.relation)
+                    if data is None:
+                        continue
+                    handler.update(instance, data)
+            logger.info("Device %s updated successfully", instance.id)
+        except Exception:
+            logger.exception("Failed to update device %s", instance.id)
             raise
-
-        if lorawan_data:
-            try:
-                lorawan_instance = getattr(instance, "lorawan_device", None)
-                if lorawan_instance:
-                    lorawan_serializer = LorawanDeviceSerializer(
-                        instance=lorawan_instance, data=lorawan_data, partial=True
-                    )
-                    lorawan_serializer.is_valid(raise_exception=True)
-                    lorawan_serializer.save()
-                    logger.info(f"LoRaWAN device updated for device {instance.id}")
-                else:
-                    LorawanDevice.objects.create(device=instance, **lorawan_data)
-                    logger.info(f"New LoRaWAN device created for device {instance.id}")
-            except Exception as e:
-                logger.error(
-                    f"Failed to update LoRaWAN device for {instance.id}: {str(e)}",
-                    exc_info=True,
-                )
-                raise
-
         return instance
 
 
 class GetDeviceSerializer(DeviceSerializer):
-    network_server = NetworkServerSerializer(read_only=True)
+    lorawan_device = ReadLorawanDeviceSerializer(read_only=True)
 
     class Meta(DeviceSerializer.Meta):
         model = Device
