@@ -11,12 +11,12 @@ class NestedDeviceHandler:
     def raw_data(self, item):
         return item.get(self.relation) or {}
 
-    def identifier(self, item):
+    def get_identifier(self, item):
         if not self.identifier_field:
             return None
         return self.raw_data(item).get(self.identifier_field)
 
-    def existing_identifiers(self, values):
+    def get_existing_identifiers(self, values):
         if not self.identifier_field:
             return set()
         return set(

@@ -58,7 +58,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
         validation_error = []
         request_identifiers = {handler.relation: set() for handler in handlers}
         existing_identifiers = {
-            handler.relation: handler.existing_identifiers(
+            handler.relation: handler.get_existing_identifiers(
                 self._handler_identifiers(handler, data)
             )
             for handler in handlers
@@ -66,9 +66,9 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 
         for item in data:
             identifiers = {
-                handler.relation: handler.identifier(item)
+                handler.relation: handler.get_identifier(item)
                 for handler in handlers
-                if handler.identifier(item)
+                if handler.get_identifier(item)
             }
             primary_identifier = next(iter(identifiers.values()), None)
 
@@ -112,7 +112,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
     def _handler_identifiers(self, handler, items):
         identifiers = []
         for item in items:
-            identifier = handler.identifier(item)
+            identifier = handler.get_identifier(item)
             if identifier:
                 identifiers.append(identifier)
         return identifiers
@@ -211,45 +211,64 @@ class DeviceSerializer(serializers.ModelSerializer):
         data["device_profile"] = device_profile
         return data
 
-    def create(self, validated_data):
-        handlers = get_nested_device_handlers()
-        nested_data = {
-            handler.relation: handler.pop_data(validated_data) for handler in handlers
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        handlers_by_relation = {
+            handler.relation: handler for handler in get_nested_device_handlers()
         }
+        input_relations = [key for key in attrs.keys() if key in handlers_by_relation]
+
+        if len(input_relations) > 1:
+            raise serializers.ValidationError("Provide only one device type.")
+        if self.instance is None and not input_relations:
+            raise serializers.ValidationError("Provide exactly one device type.")
+
+        return attrs
+
+    def create(self, validated_data):
+        handler = self._get_input_handler(validated_data)
+        nested_data = handler.pop_data(validated_data)
+
         try:
-            device = Device.objects.create(**validated_data)
+            with transaction.atomic():
+                device = Device.objects.create(**validated_data)
+                handler.create(device, nested_data)
+                logger.info(f"{handler.label} created for device {device.id}")
+
             logger.info(f"Device created successfully with ID: {device.id}")
-
-            for handler in handlers:
-                handler.create(device, nested_data.get(handler.relation))
-                if nested_data.get(handler.relation):
-                    logger.info(f"{handler.label} created for device {device.id}")
-
             return device
         except Exception as e:
             logger.error(f"Failed to create device: {str(e)}", exc_info=True)
             raise
 
     def update(self, instance, validated_data):
-        handlers = get_nested_device_handlers()
-        nested_data = {
-            handler.relation: handler.pop_data(validated_data) for handler in handlers
-        }
+        handler = self._get_input_handler(validated_data)
+        nested_data = handler.pop_data(validated_data) if handler else None
+
         try:
             with transaction.atomic():
                 for attr, value in validated_data.items():
                     setattr(instance, attr, value)
                 instance.save()
-                for handler in handlers:
-                    data = nested_data.get(handler.relation)
-                    if data is None:
-                        continue
-                    handler.update(instance, data)
+                if handler:
+                    handler.update(instance, nested_data)
             logger.info("Device %s updated successfully", instance.id)
         except Exception:
             logger.exception("Failed to update device %s", instance.id)
             raise
         return instance
+
+    def _get_input_handler(self, validated_data):
+        handlers_by_relation = {
+            handler.relation: handler for handler in get_nested_device_handlers()
+        }
+        relation = next(
+            (key for key in validated_data.keys() if key in handlers_by_relation),
+            None,
+        )
+        if not relation:
+            return None
+        return handlers_by_relation[relation]
 
 
 class GetDeviceSerializer(DeviceSerializer):
