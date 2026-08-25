@@ -98,6 +98,7 @@ class Migration(migrations.Migration):
                         editable=False,
                         primary_key=True,
                         serialize=False,
+                        unique=True,
                     ),
                 ),
                 (
@@ -118,6 +119,39 @@ class Migration(migrations.Migration):
             },
         ),
         migrations.RunPython(copy_device_fields_forward, copy_device_fields_backward),
+        migrations.AlterField(
+            model_name="device",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                unique=True,
+            ),
+        ),
+        migrations.AlterField(
+            model_name="lorawandevice",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                unique=True,
+            ),
+        ),
+        migrations.AlterField(
+            model_name="spacedevice",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                unique=True,
+            ),
+        ),
         migrations.RemoveField(
             model_name="device",
             name="network_server",

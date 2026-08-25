@@ -11,7 +11,6 @@ from apps.placement.models import Position
 
 
 class Device(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     device_model = models.UUIDField(null=True, blank=True)
     claim_code = models.CharField(max_length=100, null=True, blank=True, unique=True)
     status = models.CharField(
@@ -29,7 +28,6 @@ class Device(BaseModel):
 
 
 class LorawanDevice(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     device = models.OneToOneField(
         Device, related_name="lorawan_device", on_delete=models.CASCADE
     )
@@ -46,7 +44,6 @@ class LorawanDevice(BaseModel):
 
 
 class APIDevice(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     device = models.OneToOneField(
         Device, related_name="api_device", on_delete=models.CASCADE
     )
@@ -54,7 +51,6 @@ class APIDevice(BaseModel):
 
 
 class SpaceDevice(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     space = models.ForeignKey(
