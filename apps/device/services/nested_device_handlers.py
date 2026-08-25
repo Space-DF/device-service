@@ -1,3 +1,6 @@
+from apps.device.constants import DeviceRelation
+
+
 class NestedDeviceHandler:
     relation = None
     serializer_class = None
@@ -52,7 +55,7 @@ class NestedDeviceHandler:
 
 
 class LorawanDeviceHandler(NestedDeviceHandler):
-    relation = "lorawan_device"
+    relation = DeviceRelation.LORAWAN
     label = "LoRaWAN device"
     identifier_field = "dev_eui"
 
@@ -62,7 +65,7 @@ class LorawanDeviceHandler(NestedDeviceHandler):
 
 
 class APIDeviceHandler(NestedDeviceHandler):
-    relation = "api_device"
+    relation = DeviceRelation.API
     label = "API device"
     identifier_field = "serial_number"
 
@@ -75,7 +78,24 @@ def get_nested_device_handlers():
     from apps.device.models import APIDevice, LorawanDevice
     from apps.device.serializers import APIDeviceSerializer, LorawanDeviceSerializer
 
-    return [
+    handlers = [
         LorawanDeviceHandler(LorawanDeviceSerializer, LorawanDevice),
         APIDeviceHandler(APIDeviceSerializer, APIDevice),
     ]
+    return {handler.relation: handler for handler in handlers}
+
+
+def get_relation(item, handlers):
+    relations = get_relations(item, handlers)
+
+    if len(relations) != 1:
+        return None
+
+    return next(iter(relations))
+
+# Get the intersection of keys in item and handlers
+# And then get the relation names from the matched keys
+# Complexity: O(min(len(item), len(handlers)))
+def get_relations(item, handlers):
+    matched_relations = item.keys() & handlers.keys()
+    return {handlers[relation].relation for relation in matched_relations}

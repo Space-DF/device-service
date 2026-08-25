@@ -16,7 +16,11 @@ from apps.device.models import APIDevice, Device, LorawanDevice, SpaceDevice, Tr
 from apps.device.services.entity_properties_context import (
     _resolve_entity_properties_from_context,
 )
-from apps.device.services.nested_device_handlers import get_nested_device_handlers
+from apps.device.services.nested_device_handlers import (
+    get_nested_device_handlers,
+    get_relation,
+    get_relations,
+)
 from apps.facility.models import Facility
 from apps.facility.serializers import FacilitySerializer
 from apps.network_server.models import NetworkServer
@@ -53,42 +57,48 @@ class APIDeviceSerializer(serializers.ModelSerializer):
 class MultiDeviceSerializer(serializers.ListSerializer):
     def to_internal_value(self, data):
         handlers = get_nested_device_handlers()
+        identifiers_by_relation = {relation: set() for relation in handlers}
+        resolved_items = []
+
+        for item in data:
+            relation = get_relation(item, handlers)
+
+            if relation is None:
+                resolved_items.append((item, None, None))
+                continue
+
+            handler = handlers[relation]
+            identifier = handler.get_identifier(item)
+            resolved_items.append((item, relation, identifier))
+
+            if identifier:
+                identifiers_by_relation[relation].add(identifier)
+
         valid_items = []
         duplicated = []
         validation_error = []
-        request_identifiers = {handler.relation: set() for handler in handlers}
         existing_identifiers = {
-            handler.relation: handler.get_existing_identifiers(
-                self._handler_identifiers(handler, data)
-            )
-            for handler in handlers
+            relation: handlers[relation].get_existing_identifiers(identifiers)
+            if identifiers
+            else set()
+            for relation, identifiers in identifiers_by_relation.items()
         }
+        request_identifiers = {relation: set() for relation in handlers}
 
-        for item in data:
-            identifiers = {
-                handler.relation: handler.get_identifier(item)
-                for handler in handlers
-                if handler.get_identifier(item)
-            }
-            primary_identifier = next(iter(identifiers.values()), None)
-
-            if not identifiers:
+        for item, relation, identifier in resolved_items:
+            if relation is None or not identifier:
                 validation_error.append(None)
                 continue
 
-            has_duplicate = False
-            for relation, identifier in identifiers.items():
-                if identifier in request_identifiers[relation]:
-                    duplicated.append(identifier)
-                    has_duplicate = True
-                    break
-                if identifier in existing_identifiers[relation]:
-                    duplicated.append(identifier)
-                    has_duplicate = True
-                    break
-                request_identifiers[relation].add(identifier)
-            if has_duplicate:
+            if identifier in request_identifiers[relation]:
+                duplicated.append(identifier)
                 continue
+
+            if identifier in existing_identifiers[relation]:
+                duplicated.append(identifier)
+                continue
+
+            request_identifiers[relation].add(identifier)
 
             serializer = self.child.__class__(
                 data=item,
@@ -99,7 +109,7 @@ class MultiDeviceSerializer(serializers.ListSerializer):
                 valid_items.append(serializer.validated_data)
                 continue
 
-            validation_error.append(primary_identifier)
+            validation_error.append(identifier)
 
         self._total_failed = len(duplicated) + len(validation_error)
         self._failed_data = {
@@ -109,37 +119,29 @@ class MultiDeviceSerializer(serializers.ListSerializer):
 
         return valid_items
 
-    def _handler_identifiers(self, handler, items):
-        identifiers = []
-        for item in items:
-            identifier = handler.get_identifier(item)
-            if identifier:
-                identifiers.append(identifier)
-        return identifiers
-
     @transaction.atomic
     def create(self, validated_data):
         handlers = get_nested_device_handlers()
         device_objs = []
-        nested_objs = {handler.relation: [] for handler in handlers}
+        nested_objs = {relation: [] for relation in handlers}
 
         for item in validated_data:
-            nested_data = {
-                handler.relation: handler.pop_data(item) for handler in handlers
-            }
+            relation = get_relation(item, handlers)
+            handler = handlers[relation]
+            nested_data = handler.pop_data(item)
+
             device_obj = Device(**item)
             device_objs.append(device_obj)
-            for handler in handlers:
-                data = nested_data.get(handler.relation)
-                if data:
-                    nested_objs[handler.relation].append(
-                        handler.build_instance(device_obj, data)
-                    )
+
+            if nested_data:
+                nested_objs[relation].append(
+                    handler.build_instance(device_obj, nested_data)
+                )
 
         Device.objects.bulk_create(device_objs)
-        for handler in handlers:
-            if nested_objs[handler.relation]:
-                handler.model_class.objects.bulk_create(nested_objs[handler.relation])
+        for relation, objects in nested_objs.items():
+            if objects:
+                handlers[relation].model_class.objects.bulk_create(objects)
 
         return device_objs
 
@@ -213,14 +215,12 @@ class DeviceSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        handlers_by_relation = {
-            handler.relation: handler for handler in get_nested_device_handlers()
-        }
-        input_relations = [key for key in attrs.keys() if key in handlers_by_relation]
+        handlers = get_nested_device_handlers()
+        relations = get_relations(attrs, handlers)
 
-        if len(input_relations) > 1:
+        if len(relations) > 1:
             raise serializers.ValidationError("Provide only one device type.")
-        if self.instance is None and not input_relations:
+        if self.instance is None and not relations:
             raise serializers.ValidationError("Provide exactly one device type.")
 
         return attrs
@@ -259,13 +259,8 @@ class DeviceSerializer(serializers.ModelSerializer):
         return instance
 
     def _get_input_handler(self, validated_data):
-        handlers_by_relation = {
-            handler.relation: handler for handler in get_nested_device_handlers()
-        }
-        relation = next(
-            (key for key in validated_data.keys() if key in handlers_by_relation),
-            None,
-        )
+        handlers_by_relation = get_nested_device_handlers()
+        relation = get_relation(validated_data, handlers_by_relation)
         if not relation:
             return None
         return handlers_by_relation[relation]
