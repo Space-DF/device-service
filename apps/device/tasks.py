@@ -145,7 +145,9 @@ def device_upgrade_task(**kwargs):
 
 
 @tenant_shared_task(name="spacedf.tasks.update_device_location")
-def update_device_location(device_id: str, latitude: float, longitude: float):
+def update_device_location(
+    device_id: str, latitude: float, longitude: float, bearing: float
+):
     try:
         device = Device.objects.get(id=device_id)
     except Device.DoesNotExist:
@@ -157,5 +159,6 @@ def update_device_location(device_id: str, latitude: float, longitude: float):
     device.location = {
         "latitude": latitude,
         "longitude": longitude,
+        "bearing": bearing,
     }
     device.save(update_fields=["location", "updated_at"])
