@@ -93,6 +93,7 @@ def get_relation(item, handlers):
 
     return next(iter(relations))
 
+
 # Get the intersection of keys in item and handlers
 # And then get the relation names from the matched keys
 # Complexity: O(min(len(item), len(handlers)))

@@ -61,7 +61,7 @@ class DeviceViewSet(
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
-    search_fields = ["lorawan_device__dev_eui"]
+    search_fields = ["lorawan_device__dev_eui", "api_device__serial_number"]
     filterset_class = DeviceFilter
     quota_classes = [DeviceQuota]
 
