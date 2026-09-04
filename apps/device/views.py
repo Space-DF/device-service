@@ -52,12 +52,16 @@ class DeviceViewSet(
     QuotaMixin,
     viewsets.ModelViewSet,
 ):
-    queryset = Device.objects.select_related("lorawan_device", "network_server").all()
+    queryset = Device.objects.select_related(
+        "lorawan_device",
+        "lorawan_device__network_server",
+        "api_device",
+    ).all()
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, SearchFilter, DjangoFilterBackend]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
-    search_fields = ["lorawan_device__dev_eui"]
+    search_fields = ["lorawan_device__dev_eui", "api_device__serial_number"]
     filterset_class = DeviceFilter
     quota_classes = [DeviceQuota]
 
@@ -111,6 +115,8 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
+        "device__lorawan_device__network_server",
+        "device__api_device",
         "floor",
         "area",
         "facility",
@@ -172,7 +178,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
 class FindDeviceByCodeView(DeactivationMixin, views.APIView):
     def get(self, request, *args, **kwargs):
         claim_code = kwargs.get("claim_code")
-        device = Device.objects.filter(lorawan_device__claim_code=claim_code).first()
+        device = Device.objects.filter(claim_code=claim_code).first()
         if not device:
             return Response(
                 {"result": "The device not found in the organization!"},
@@ -330,9 +336,10 @@ class TripViewSet(
 class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
     swagger_schema = None
     serializer_class = FormatDeviceSerializer
-    queryset = Device.objects.select_related("lorawan_device").prefetch_related(
-        "space_devices"
-    )
+    queryset = Device.objects.select_related(
+        "lorawan_device",
+        "api_device",
+    ).prefetch_related("space_devices")
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -371,6 +378,8 @@ class RetrieveSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
+        "device__lorawan_device__network_server",
+        "device__api_device",
         "floor",
         "area",
         "facility",
@@ -406,7 +415,7 @@ class RetrievePublicSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView)
     lookup_field = "id"
 
     def get_queryset(self):
-        return Device.objects.select_related("lorawan_device").filter(
+        return Device.objects.select_related("lorawan_device", "api_device").filter(
             is_published=True,
             space_devices__isnull=True,
         )
