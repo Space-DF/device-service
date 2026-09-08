@@ -7,7 +7,8 @@ from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.deactivation import DeactivationMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
 from django.db import transaction
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg import openapi
@@ -133,6 +134,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         "name",
         "description",
         "device__lorawan_device__dev_eui",
+        "device__api_device__serial_number",
         "device__device_model",
     ]
 
@@ -244,8 +246,13 @@ class TripViewSet(
         self.check_deactivated(space)
 
         # If device is deactivated, only show trips before deactivation date
+        device_identifier = self.kwargs.get("dev_eui", "").strip()
+        lorawan_dev_eui = device_identifier.lower()
         device = (
-            Device.objects.filter(lorawan_device__dev_eui=self.kwargs.get("dev_eui"))
+            Device.objects.filter(
+                Q(lorawan_device__dev_eui=lorawan_dev_eui)
+                | Q(api_device__serial_number=device_identifier)
+            )
             .only("deactivated_at")
             .first()
         )
@@ -259,7 +266,10 @@ class TripViewSet(
         )
 
         if self.action == "retrieve":
-            queryset = queryset.select_related("space_device__device__lorawan_device")
+            queryset = queryset.select_related(
+                "space_device__device__lorawan_device",
+                "space_device__device__api_device",
+            )
 
         return queryset
 
@@ -349,13 +359,18 @@ class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
             )[:1]
         )
 
-        return qs.annotate(space_slug=space_slug)
+        return qs.annotate(
+            device_id=Coalesce("lorawan_device__id", "api_device__id"),
+            space_slug=space_slug,
+        )
 
     def get_object(self):
-        dev_eui = self.kwargs.get("dev_eui").lower()
+        device_identifier = self.kwargs.get("identifier", "").strip()
+        lorawan_dev_eui = device_identifier.lower()
         return get_object_or_404(
             self.get_queryset(),
-            lorawan_device__dev_eui=dev_eui,
+            Q(lorawan_device__dev_eui=lorawan_dev_eui)
+            | Q(api_device__serial_number=device_identifier),
         )
 
 
@@ -397,6 +412,7 @@ class ListPublicSpaceDeviceView(generics.ListAPIView):
     ordering = ["-created_at"]
     search_fields = [
         "lorawan_device__dev_eui",
+        "api_device__serial_number",
         "device_model",
     ]
 

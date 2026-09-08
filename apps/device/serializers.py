@@ -3,6 +3,7 @@ from functools import cached_property
 
 from common.utils.custom_fields import HexCharField
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers
 
 from apps.building.models import Area, Building, Floor
@@ -11,8 +12,9 @@ from apps.building.serializers import (
     BuildingSerializer,
     FloorSerializer,
 )
-from apps.device.constants import DeviceStatus
+from apps.device.constants import DeviceRelation, DeviceStatus
 from apps.device.models import APIDevice, Device, LorawanDevice, SpaceDevice, Trip
+from apps.device.services.api_device_serial_number import generate_api_serial_number
 from apps.device.services.entity_properties_context import (
     _resolve_entity_properties_from_context,
 )
@@ -64,8 +66,11 @@ class MultiDeviceSerializer(serializers.ListSerializer):
             relation = get_relation(item, handlers)
 
             if relation is None:
-                resolved_items.append((item, None, None))
-                continue
+                item = dict(item)
+                item[DeviceRelation.API] = {
+                    "serial_number": generate_api_serial_number()
+                }
+                relation = DeviceRelation.API
 
             handler = handlers[relation]
             identifier = handler.get_identifier(item)
@@ -153,7 +158,7 @@ class LocationSerializer(serializers.Serializer):
 
 
 class FormatDeviceSerializer(serializers.ModelSerializer):
-    device_id = serializers.UUIDField(read_only=True, source="lorawan_device.id")
+    device_id = serializers.UUIDField(read_only=True)
     space_slug = serializers.CharField()
     location = LocationSerializer(read_only=True)
 
@@ -221,7 +226,7 @@ class DeviceSerializer(serializers.ModelSerializer):
         if len(relations) > 1:
             raise serializers.ValidationError("Provide only one device type.")
         if self.instance is None and not relations:
-            raise serializers.ValidationError("Provide exactly one device type.")
+            attrs[DeviceRelation.API] = {"serial_number": generate_api_serial_number()}
 
         return attrs
 
@@ -395,9 +400,17 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        dev_eui = validated_data.pop("dev_eui").lower()
+        device_identifier = validated_data.pop("dev_eui").strip()
+        lorawan_dev_eui = device_identifier.lower()
         position_data = validated_data.pop("position", None)
-        device = Device.objects.filter(lorawan_device__dev_eui=dev_eui).first()
+        device = (
+            Device.objects.filter(
+                Q(lorawan_device__dev_eui=lorawan_dev_eui)
+                | Q(api_device__serial_number=device_identifier)
+            )
+            .select_related("lorawan_device", "api_device")
+            .first()
+        )
 
         if not device:
             raise serializers.ValidationError(

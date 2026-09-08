@@ -11,7 +11,7 @@ from django.dispatch import receiver
 
 from apps.device.constants import DeviceStatus
 from apps.device.models import Device, SpaceDevice
-from apps.device.services.lorawan_cache_service import clear_lorawan_cache
+from apps.device.services.device_mapping_cache_service import clear_device_mapping_cache
 from apps.placement.models import Position
 
 logger = logging.getLogger(__name__)
@@ -66,9 +66,7 @@ def handle_device_space_delete(sender, instance, **kwargs):
     )
     tenant = connection.get_tenant()
     slug_name = getattr(tenant, "slug_name", connection.schema_name)
-    dev_eui = getattr(getattr(instance.device, "lorawan_device", None), "dev_eui", None)
-
-    clear_lorawan_cache(slug_name, dev_eui)
+    clear_device_mapping_cache(slug_name, instance.device)
 
     send_task(
         name=constants.AUTH_SERVICE_ADD_OR_REMOVE_DEVICE,
@@ -92,10 +90,16 @@ def handle_device_space_delete(sender, instance, **kwargs):
 def handle_device_delete(sender, instance, **kwargs):
     tenant = connection.get_tenant()
     slug_name = getattr(tenant, "slug_name", connection.schema_name)
-    lorawan_obj = getattr(instance, "lorawan_device", None)
-    dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
+    clear_device_mapping_cache(slug_name, instance)
 
-    clear_lorawan_cache(slug_name, dev_eui)
+    if instance.is_published:
+        send_task(
+            name="delete_device",
+            message={
+                "organization_slug_name": slug_name,
+                "device_id": str(instance.id),
+            },
+        )
 
 
 @receiver(post_save, sender=Device)
@@ -105,10 +109,7 @@ def handle_device_update(sender, instance, created, **kwargs):
 
     tenant = connection.get_tenant()
     slug_name = getattr(tenant, "slug_name", connection.schema_name)
-    lorawan_obj = getattr(instance, "lorawan_device", None)
-    dev_eui = getattr(lorawan_obj, "dev_eui", None) if lorawan_obj is not None else None
-
-    clear_lorawan_cache(slug_name, dev_eui)
+    clear_device_mapping_cache(slug_name, instance)
 
 
 @receiver(post_delete, sender=SpaceDevice)
