@@ -60,7 +60,7 @@ urlpatterns = [
         name="check_device",
     ),
     path(
-        "devices/<str:dev_eui>/internal",
+        "devices/<str:identifier>/internal",
         DeviceLookupView.as_view(),
         name="device_lookup",
     ),
