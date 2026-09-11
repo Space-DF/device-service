@@ -107,7 +107,57 @@ class DeviceViewSet(
         )
 
 
-class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
+class SpaceDeviceSerializationMixin:
+    entity_properties_context = False
+
+    def get_space_device_serializer_context(self, items, base_context=None):
+        context = get_device_profile_context(
+            base_context or self.get_serializer_context(),
+            items,
+        )
+        if self.entity_properties_context:
+            context = _entity_properties_context(
+                context,
+                items,
+                _organization_slug(self.request),
+            )
+        return context
+
+    def get_space_device_list_response(self, items):
+        page = self.paginate_queryset(items)
+        if page is not None:
+            serializer = self.get_serializer(
+                page,
+                many=True,
+                context=self.get_space_device_serializer_context(page),
+            )
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(
+            items,
+            many=True,
+            context=self.get_space_device_serializer_context(items),
+        )
+        return Response(serializer.data)
+
+    def get_object(self):
+        instance = super().get_object()
+        if self.request.method == "GET":
+            self._space_device_context_items = [instance]
+        return instance
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        items = getattr(self, "_space_device_context_items", None)
+        if items is None:
+            return context
+        return self.get_space_device_serializer_context(items, base_context=context)
+
+
+class ListCreateSpaceDeviceViewSet(
+    SpaceDeviceSerializationMixin,
+    SpaceListCreateAPIView,
+):
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
@@ -123,6 +173,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
     filterset_class = SpaceDeviceFilter
     ordering_fields = ["created_at", "name"]
     space_field = "space"
+    entity_properties_context = True
     search_fields = [
         "name",
         "description",
@@ -139,34 +190,7 @@ class ListCreateSpaceDeviceViewSet(SpaceListCreateAPIView):
         service = SpaceDeviceListService(request)
         queryset = self.filter_queryset(self.get_queryset())
         results = service.get_combined_results(queryset)
-
-        page = self.paginate_queryset(results)
-        if page is not None:
-            context = get_device_profile_context(self.get_serializer_context(), page)
-            context = _entity_properties_context(
-                context,
-                page,
-                _organization_slug(request),
-            )
-            serializer = self.get_serializer(
-                page,
-                many=True,
-                context=context,
-            )
-            return self.get_paginated_response(serializer.data)
-
-        context = get_device_profile_context(self.get_serializer_context(), results)
-        context = _entity_properties_context(
-            context,
-            results,
-            _organization_slug(request),
-        )
-        serializer = self.get_serializer(
-            results,
-            many=True,
-            context=context,
-        )
-        return Response(serializer.data)
+        return self.get_space_device_list_response(results)
 
 
 class FindDeviceByCodeView(DeactivationMixin, views.APIView):
@@ -198,12 +222,14 @@ class FindDeviceByCodeView(DeactivationMixin, views.APIView):
 
 
 class DeleteSpaceDeviceViewSet(
+    SpaceDeviceSerializationMixin,
     DeactivationMixin,
     generics.RetrieveUpdateDestroyAPIView,
 ):
     lookup_field = "id"
     queryset = SpaceDevice.objects.select_related("device", "space").all()
     deactivation = ["device", "space"]
+    entity_properties_context = True
 
     def get_serializer_class(self):
         if self.request.method == "GET":
@@ -364,10 +390,15 @@ class SpaceDeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView)
         return get_object_or_404(queryset, device_id=device_id)
 
 
-class RetrieveSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
+class RetrieveSpaceDeviceView(
+    SpaceDeviceSerializationMixin,
+    DeactivationMixin,
+    generics.RetrieveAPIView,
+):
     serializer_class = SpaceDeviceSerializer
     lookup_field = "device_id"
     deactivation = ["device", "space"]
+    entity_properties_context = True
     queryset = SpaceDevice.objects.select_related(
         "device",
         "device__lorawan_device",
@@ -379,7 +410,10 @@ class RetrieveSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
     ).all()
 
 
-class ListPublicSpaceDeviceView(generics.ListAPIView):
+class ListPublicSpaceDeviceView(
+    SpaceDeviceSerializationMixin,
+    generics.ListAPIView,
+):
     serializer_class = SpaceDeviceSerializer
     pagination_class = BasePagination
     permission_classes = [AllowAny]
@@ -399,8 +433,16 @@ class ListPublicSpaceDeviceView(generics.ListAPIView):
             .order_by("-created_at")
         )
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        return self.get_space_device_list_response(queryset)
 
-class RetrievePublicSpaceDeviceView(DeactivationMixin, generics.RetrieveAPIView):
+
+class RetrievePublicSpaceDeviceView(
+    SpaceDeviceSerializationMixin,
+    DeactivationMixin,
+    generics.RetrieveAPIView,
+):
     serializer_class = SpaceDeviceSerializer
     permission_classes = [AllowAny]
     lookup_field = "id"
