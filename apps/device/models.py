@@ -11,15 +11,8 @@ from apps.placement.models import Position
 
 
 class Device(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    network_server = models.ForeignKey(
-        NetworkServer,
-        related_name="devices",
-        on_delete=models.CASCADE,
-        blank=True,
-        null=True,
-    )
     device_model = models.UUIDField(null=True, blank=True)
+    claim_code = models.CharField(max_length=100, null=True, blank=True, unique=True)
     status = models.CharField(
         choices=DeviceStatus.choices, default=DeviceStatus.IN_INVENTORY
     )
@@ -35,18 +28,29 @@ class Device(BaseModel):
 
 
 class LorawanDevice(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     device = models.OneToOneField(
         Device, related_name="lorawan_device", on_delete=models.CASCADE
     )
     dev_eui = models.CharField(max_length=16, unique=True)
     join_eui = models.CharField(max_length=16, null=True, blank=True)
     app_key = models.CharField(max_length=32, null=True, blank=True)
-    claim_code = models.CharField(max_length=100, null=True, blank=True, unique=True)
+    network_server = models.ForeignKey(
+        NetworkServer,
+        related_name="lorawan_devices",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+    )
+
+
+class APIDevice(BaseModel):
+    device = models.OneToOneField(
+        Device, related_name="api_device", on_delete=models.CASCADE
+    )
+    serial_number = models.CharField(max_length=100, unique=True)
 
 
 class SpaceDevice(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     space = models.ForeignKey(

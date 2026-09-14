@@ -1,3 +1,6 @@
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Q
+
 from apps.device.models import Device
 
 
@@ -17,14 +20,15 @@ class SpaceDeviceListService:
         if device_id:
             public_filters["id"] = device_id
 
-        public_devices = Device.objects.select_related("lorawan_device").filter(
-            **public_filters
-        )
+        public_devices = Device.objects.select_related(
+            "lorawan_device", "api_device"
+        ).filter(**public_filters)
 
         search = self.request.query_params.get("search")
         if search:
             public_devices = public_devices.filter(
-                lorawan_device__dev_eui__icontains=search
+                Q(lorawan_device__dev_eui__icontains=search)
+                | Q(api_device__serial_number__icontains=search)
             )
 
         return public_devices.distinct()
@@ -40,8 +44,21 @@ class SpaceDeviceListService:
             if field != "name" or value:
                 return value
 
-            lorawan_device = getattr(obj, "lorawan_device", None)
-            return getattr(lorawan_device, "dev_eui", None) or str(obj.id)
+            try:
+                lorawan_device = obj.lorawan_device
+            except ObjectDoesNotExist:
+                lorawan_device = None
+
+            try:
+                api_device = obj.api_device
+            except ObjectDoesNotExist:
+                api_device = None
+
+            return (
+                getattr(lorawan_device, "dev_eui", None)
+                or getattr(api_device, "serial_number", None)
+                or str(obj.id)
+            )
 
         results.sort(key=sort_key, reverse=ordering.startswith("-"))
         return results

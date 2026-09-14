@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
 from django.db import models
 
@@ -22,3 +23,8 @@ class LocationPoint:
 class DeviceStatus(models.TextChoices):
     ACTIVE = "active"
     IN_INVENTORY = "in_inventory"
+
+
+class DeviceRelation(str, Enum):
+    LORAWAN = "lorawan_device"
+    API = "api_device"
