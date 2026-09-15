@@ -14,11 +14,13 @@ class EntityPropertiesService:
         self,
         device_ids: set[str],
         organization_slug: str,
+        end_dates: dict[str, str] | None = None,
     ) -> dict[str, dict]:
         try:
             entities_by_device_id = self.telemetry_client.get_entity_properties_batch(
                 list(device_ids),
                 organization_slug,
+                end_dates or {},
             )
             return {
                 device_id: {
