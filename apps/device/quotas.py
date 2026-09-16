@@ -1,5 +1,9 @@
+from contextlib import nullcontext
+
 from common.apps.billing.constants import FeatureCode, FeatureUsageScope
 from common.apps.billing.mixins import BaseQuota
+from django.db.utils import DatabaseError
+from django_tenants.utils import schema_context
 
 
 class DeviceQuota(BaseQuota):
@@ -25,5 +29,16 @@ class DeviceQuota(BaseQuota):
             getattr(request, "data", None),
             list,
         ):
-            return len(request.data)
+            organization = request.headers.get("X-Organization")
+            try:
+                with schema_context(organization) if organization else nullcontext():
+                    serializer = view.get_serializer(
+                        data=request.data,
+                        many=True,
+                        context=view.get_serializer_context(),
+                    )
+                    serializer.is_valid(raise_exception=False)
+            except DatabaseError:
+                return len(request.data)
+            return len(getattr(serializer, "validated_data", []))
         return super().get_amount(request, view)
