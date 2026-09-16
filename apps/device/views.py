@@ -449,6 +449,7 @@ class ListPublicSpaceDeviceView(
     generics.ListAPIView,
 ):
     serializer_class = SpaceDeviceSerializer
+    entity_properties_context = True
     pagination_class = BasePagination
     permission_classes = [AllowAny]
     filter_backends = [OrderingFilter, SearchFilter]
@@ -479,6 +480,7 @@ class RetrievePublicSpaceDeviceView(
     generics.RetrieveAPIView,
 ):
     serializer_class = SpaceDeviceSerializer
+    entity_properties_context = True
     permission_classes = [AllowAny]
     lookup_field = "id"
 
