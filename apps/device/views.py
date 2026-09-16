@@ -37,6 +37,9 @@ from apps.device.serializers import (
     UpdateSpaceDeviceSerializer,
 )
 from apps.device.services.device_profile_resolver import get_device_profile_context
+from apps.device.services.device_subscription_service import (
+    fill_active_slot_after_delete,
+)
 from apps.device.services.entity_properties_context import (
     _entity_properties_context,
     _organization_slug,
@@ -82,6 +85,13 @@ class DeviceViewSet(
                 _organization_slug(self.request),
             )
         return super().get_serializer(*args, **kwargs)
+
+    def perform_destroy(self, instance):
+        fill_active_slot = not instance.is_deactivated
+        org_slug = _organization_slug(self.request)
+        with transaction.atomic():
+            super().perform_destroy(instance)
+            fill_active_slot_after_delete(fill_active_slot, org_slug)
 
     @swagger_auto_schema(
         method="post",
