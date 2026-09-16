@@ -1,12 +1,14 @@
 import logging
 
 from common.apps.billing.constants import FeatureCode
-from common.celery.task_senders import send_subscription_task
 from common.celery.tasks import PermanentTaskError, task, tenant_shared_task
-from django.utils.dateparse import parse_datetime
 from django_tenants.utils import schema_context
 
 from apps.device.models import Device
+from apps.device.services.device_subscription_service import (
+    reconcile_device_limit,
+    send_telemetry_subscription_task,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,47 +41,13 @@ def device_downgrade_task(**kwargs):
     downgraded_at = kwargs.get("downgraded_at")
 
     with schema_context(org_slug):
-        devices = Device.objects.filter(is_deactivated=False).order_by("created_at")
-
-        excess_ids = list(devices.values_list("id", flat=True)[max_devices:])
-        count = (
-            Device.objects.filter(id__in=excess_ids, is_deactivated=False).update(
-                is_deactivated=True, deactivated_at=downgraded_at
-            )
-            if excess_ids
-            else 0
-        )
-        if not excess_ids and downgraded_at:
-            retry_timestamp = parse_datetime(downgraded_at)
-            if retry_timestamp is not None:
-                excess_ids = list(
-                    Device.objects.filter(
-                        is_deactivated=True,
-                        deactivated_at=retry_timestamp,
-                    ).values_list("id", flat=True)
-                )
-        if count:
-            logger.info(
-                "Downgrade: deactivated %s excess devices for org %s "
-                "(kept %s active out of %s total).",
-                count,
-                org_slug,
-                min(devices.count(), max_devices),
-                devices.count(),
-            )
+        result = reconcile_device_limit(max_devices, deactivated_at=downgraded_at)
+        count = result["deactivated_count"]
+        excess_ids = result["suspended_ids"]
 
     # Keep outside the schema_context - send_task is broker-only,
     # No DB access needed.
-    if excess_ids:
-        send_subscription_task(
-            service="telemetry",
-            lifecycle="downgrade",
-            task_name="telemetry_downgrade",
-            message={
-                "org_slug": org_slug,
-                "device_ids": [str(device_id) for device_id in excess_ids],
-            },
-        )
+    send_telemetry_subscription_task("downgrade", excess_ids, org_slug)
     return count
 
 
@@ -106,41 +74,12 @@ def device_upgrade_task(**kwargs):
         )
 
     with schema_context(org_slug):
-        if max_devices is None:
-            reactivated_ids = list(
-                Device.objects.order_by("created_at").values_list("id", flat=True)
-            )
-        else:
-            reactivated_ids = list(
-                Device.objects.order_by("created_at").values_list("id", flat=True)[
-                    :max_devices
-                ]
-            )
-        count = (
-            Device.objects.filter(id__in=reactivated_ids, is_deactivated=True).update(
-                is_deactivated=False, deactivated_at=None
-            )
-            if reactivated_ids
-            else 0
-        )
-        if count:
-            logger.info(
-                "Renewal: reactivated %s devices for org %s.",
-                count,
-                org_slug,
-            )
+        result = reconcile_device_limit(max_devices)
+        count = result["reactivated_count"]
+        reactivated_ids = result["active_ids"]
 
     # Cascade reactivation to telemetry entities.
-    if reactivated_ids:
-        send_subscription_task(
-            service="telemetry",
-            lifecycle="upgrade",
-            task_name="telemetry_upgrade",
-            message={
-                "org_slug": org_slug,
-                "device_ids": [str(device_id) for device_id in reactivated_ids],
-            },
-        )
+    send_telemetry_subscription_task("upgrade", reactivated_ids, org_slug)
     return count
 
 
