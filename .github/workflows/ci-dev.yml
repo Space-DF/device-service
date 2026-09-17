@@ -15,12 +15,13 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.10"
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "0.6.5"
     - name: Install Dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8==4.0.1
-        pip install bandit==1.7.8
-        pip install codespell==2.2.4
+        uv pip install --system flake8==4.0.1 bandit==1.7.8 codespell==2.2.4
     - name: Run Flake8
       run: |
         flake8
