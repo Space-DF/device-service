@@ -370,7 +370,7 @@ class SpaceDeviceSerializer(serializers.ModelSerializer):
 
 
 class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
-    dev_eui = serializers.CharField(max_length=16, write_only=True)
+    identifier = serializers.CharField(max_length=16, write_only=True)
     building = serializers.PrimaryKeyRelatedField(
         queryset=Building.objects.all(), required=False, allow_null=True
     )
@@ -390,7 +390,7 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
         fields = [
             "name",
             "description",
-            "dev_eui",
+            "identifier",
             "building",
             "facility",
             "floor",
@@ -400,13 +400,13 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        device_identifier = validated_data.pop("dev_eui").strip()
-        lorawan_dev_eui = device_identifier.lower()
+        identifier = validated_data.pop("identifier").strip()
+        lower_identifier = identifier.lower()
         position_data = validated_data.pop("position", None)
         device = (
             Device.objects.filter(
-                Q(lorawan_device__dev_eui=lorawan_dev_eui)
-                | Q(api_device__serial_number=device_identifier)
+                Q(lorawan_device__dev_eui=lower_identifier)
+                | Q(api_device__serial_number=identifier)
             )
             .select_related("lorawan_device", "api_device")
             .first()
