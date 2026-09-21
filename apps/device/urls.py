@@ -7,22 +7,24 @@ from apps.device.views import (
     DeviceLookupView,
     DeviceViewSet,
     FindDeviceByCodeView,
-    ListCreateSpaceDeviceViewSet,
+    ListCreateSpaceDeviceView,
     ListPublicSpaceDeviceView,
+    ListTripView,
     RetrievePublicSpaceDeviceView,
     RetrieveSpaceDeviceView,
+    RetrieveTripView,
     SpaceDeviceLookupView,
-    TripViewSet,
 )
 
 app_name = "device"
 
 router = DefaultRouter()
 router.register("devices", DeviceViewSet)
-router.register("trips", TripViewSet, basename="trip")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("trips", ListTripView.as_view(), name="trip_list"),
+    path("trips/<uuid:id>", RetrieveTripView.as_view(), name="trip_detail"),
     path(
         "public/device-spaces",
         ListPublicSpaceDeviceView.as_view(),
@@ -43,7 +45,7 @@ urlpatterns = [
         RetrieveSpaceDeviceView.as_view(),
         name="device_spaces_by_device_id",
     ),
-    path("device-spaces", ListCreateSpaceDeviceViewSet.as_view(), name="device_spaces"),
+    path("device-spaces", ListCreateSpaceDeviceView.as_view(), name="device_spaces"),
     path(
         "device-spaces/bulk-update",
         BulkUpdateSpaceDeviceView.as_view(),

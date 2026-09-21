@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import Q
 
-from apps.device.models import Device, SpaceDevice
+from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.services.device_profile_resolver import resolve_key_feature_filter
 
 
@@ -59,3 +59,13 @@ class SpaceDeviceFilter(django_filters.FilterSet):
             Q(device__location__latitude__gte=south),
             Q(device__location__latitude__lte=north),
         )
+
+
+class TripFilter(django_filters.FilterSet):
+    space_device__device_id = django_filters.CharFilter(
+        field_name="device_id", lookup_expr="exact"
+    )
+
+    class Meta:
+        model = Trip
+        fields = ["device_id"]

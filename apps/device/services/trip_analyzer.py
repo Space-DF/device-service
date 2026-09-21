@@ -13,8 +13,9 @@ from common.utils.haversine_distance import haversine_distance
 from common.utils.telemetry_client import LocationPoint, TelemetryServiceClient
 from django.conf import settings
 from django.db import transaction
+from rest_framework.exceptions import ParseError
 
-from apps.device.models import SpaceDevice, Trip
+from apps.device.models import Device, Trip
 from apps.device.services.filter_processor import FilterProcessor
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TripWithLocations:
     id: str
-    space_device_id: str
+    device_id: str
     started_at: str
     is_finished: bool
     checkpoints: List[LocationPoint]
@@ -75,20 +76,21 @@ class TripAnalyzerService:
             self.offline_split_minutes,
         )
 
-    def analyze_and_update_current_trip(
-        self,
-        organization_slug: str,
-        space_device: SpaceDevice,
-        current_trip: Trip | None = None,
-    ):
-        device_id = str(space_device.device.id)
-        space_slug = space_device.space.slug_name
+    def analyze_and_update_current_trip(self, organization_slug: str, device_id: str):
+        try:
+            device = Device.objects.get(id=device_id)
+        except Device.DoesNotExist:
+            raise ParseError("Device does not exist.")
 
-        context = self._build_analysis_context(space_device, current_trip)
+        current_trip = (
+            Trip.objects.filter(device=device, is_finished=False)
+            .order_by("-started_at")
+            .first()
+        )
 
+        context = self._build_analysis_context(device, current_trip)
         new_locations = self._fetch_preprocessed_locations(
             organization_slug=organization_slug,
-            space_slug=space_slug,
             device_id=device_id,
             start_time=context.start_time,
         )
@@ -98,17 +100,15 @@ class TripAnalyzerService:
             return
 
         with transaction.atomic():
-            space_device = SpaceDevice.objects.select_for_update().get(
-                pk=space_device.pk
-            )
-            current_trip = self._get_locked_current_trip(space_device, current_trip)
-            context = self._build_analysis_context(space_device, current_trip)
+            device = Device.objects.select_for_update().get(pk=device.pk)
+            current_trip = self._get_locked_current_trip(device, current_trip)
+            context = self._build_analysis_context(device, current_trip)
 
             if current_trip and context.analysis_start is None:
                 return
 
             self._process_locations_for_trip(
-                space_device=space_device,
+                device=device,
                 current_trip=current_trip,
                 new_locations=new_locations,
                 analysis_start=context.analysis_start,
@@ -116,7 +116,7 @@ class TripAnalyzerService:
 
     def _get_locked_current_trip(
         self,
-        space_device: SpaceDevice,
+        device: Device,
         current_trip: Trip | None,
     ) -> Trip | None:
         if current_trip:
@@ -124,21 +124,21 @@ class TripAnalyzerService:
 
         return (
             Trip.objects.select_for_update()
-            .filter(space_device=space_device, is_finished=False)
+            .filter(device=device, is_finished=False)
             .order_by("-started_at")
             .first()
         )
 
     def _build_analysis_context(
         self,
-        space_device: SpaceDevice,
+        device: Device,
         current_trip: Trip | None,
     ) -> TripAnalysisContext:
         if current_trip:
             return self._build_existing_trip_context(current_trip)
 
         latest_trip = (
-            Trip.objects.filter(space_device=space_device)
+            Trip.objects.filter(device=device)
             .order_by("-last_report", "-started_at")
             .first()
         )
@@ -172,7 +172,6 @@ class TripAnalyzerService:
     def _fetch_preprocessed_locations(
         self,
         organization_slug: str,
-        space_slug: str,
         device_id: str,
         start_time: datetime,
     ) -> list[LocationPoint]:
@@ -181,7 +180,6 @@ class TripAnalyzerService:
         locations: list[LocationPoint] = self.telemetry_client.get_location_history(
             device_id=device_id,
             organization_slug=organization_slug,
-            space_slug=space_slug,
             start=start_time,
             end=None,
         )
@@ -196,7 +194,7 @@ class TripAnalyzerService:
 
     def _process_locations_for_trip(
         self,
-        space_device: SpaceDevice,
+        device: Device,
         current_trip: Trip | None,
         new_locations: list[LocationPoint],
         analysis_start: datetime | None,
@@ -204,7 +202,7 @@ class TripAnalyzerService:
         offline_split_delta = timedelta(minutes=self.offline_split_minutes)
         logger.debug(
             "Process locations for device=%s current_trip=%s analysis_start=%s total_points=%s",
-            space_device.device_id,
+            device.id,
             current_trip.id if current_trip else None,
             analysis_start,
             len(new_locations),
@@ -221,7 +219,7 @@ class TripAnalyzerService:
             logger.debug(
                 "Processing point for device=%s timestamp=%s coords=%s is_new=%s "
                 "current_trip=%s pending_points=%s trip_points=%s",
-                space_device.device_id,
+                device.id,
                 loc.timestamp,
                 coords,
                 is_new,
@@ -232,7 +230,7 @@ class TripAnalyzerService:
 
             if self._handle_first_location_case(
                 state,
-                space_device,
+                device,
                 loc,
                 coords,
                 is_new,
@@ -242,7 +240,7 @@ class TripAnalyzerService:
             gap = loc.timestamp - state.prev_time
             logger.debug(
                 "Device %s step: gap=%.2fmin, prev_time=%s, curr_time=%s",
-                space_device.device_id,
+                device.id,
                 gap.total_seconds() / 60.0,
                 state.prev_time,
                 loc.timestamp,
@@ -253,7 +251,7 @@ class TripAnalyzerService:
                     state.pending_trip_locations = []
                     state.pending_anchor_location = None
                     self._reset_stop_state(state)
-                self._handle_pending_trip_case(state, space_device, loc, is_new)
+                self._handle_pending_trip_case(state, device, loc, is_new)
                 self._advance_trip_processing_cursor(state, loc.timestamp, coords)
                 continue
 
@@ -286,7 +284,7 @@ class TripAnalyzerService:
             logger.debug(
                 "Device %s step_distance=%.2fm stationary_distance=%.2fm, "
                 "prev_coords=%s, curr_coords=%s",
-                space_device.device_id,
+                device.id,
                 step_distance,
                 stationary_distance,
                 state.prev_coords,
@@ -295,7 +293,7 @@ class TripAnalyzerService:
 
             if self._handle_stationary_case(
                 state=state,
-                space_device=space_device,
+                device=device,
                 loc=loc,
                 coords=coords,
                 is_new=is_new,
@@ -310,7 +308,7 @@ class TripAnalyzerService:
         self._save_processed_trip(state)
         logger.error(
             "Finished processing device=%s current_trip=%s pending_points=%s trip_points=%s",
-            space_device.device_id,
+            device.id,
             state.current_trip.id if state.current_trip else None,
             len(state.pending_trip_locations),
             len(state.trip_locations),
@@ -319,7 +317,7 @@ class TripAnalyzerService:
     def _handle_first_location_case(
         self,
         state: TripProcessingState,
-        space_device: SpaceDevice,
+        device: Device,
         loc: LocationPoint,
         coords: Tuple[float, float],
         is_new: bool,
@@ -334,12 +332,12 @@ class TripAnalyzerService:
             if is_new:
                 logger.error(
                     "First point buffered for device=%s timestamp=%s coords=%s",
-                    space_device.device_id,
+                    device.id,
                     loc.timestamp,
                     coords,
                 )
                 self._append_trip_location(state.pending_trip_locations, loc)
-                self._try_create_trip_from_pending(state, space_device)
+                self._try_create_trip_from_pending(state, device)
             return True
 
         state.trip_locations.append(loc)
@@ -386,7 +384,7 @@ class TripAnalyzerService:
     def _handle_stationary_case(
         self,
         state: TripProcessingState,
-        space_device: SpaceDevice,
+        device: Device,
         loc: LocationPoint,
         coords: Tuple[float, float],
         is_new: bool,
@@ -407,7 +405,7 @@ class TripAnalyzerService:
         ).total_seconds() / 60.0
         logger.debug(
             "Device %s stationary for %.2fmin",
-            space_device.device_id,
+            device.id,
             stop_duration_min,
         )
 
@@ -443,7 +441,7 @@ class TripAnalyzerService:
     def _handle_pending_trip_case(
         self,
         state: TripProcessingState,
-        space_device: SpaceDevice,
+        device: Device,
         loc: LocationPoint,
         is_new: bool,
     ) -> None:
@@ -464,7 +462,7 @@ class TripAnalyzerService:
                 logger.debug(
                     "Pending anchor retained for device=%s timestamp=%s "
                     "anchor_timestamp=%s anchor_distance=%.2fm threshold=%.2fm",
-                    space_device.device_id,
+                    device.id,
                     loc.timestamp,
                     state.pending_anchor_location.timestamp,
                     anchor_distance,
@@ -475,7 +473,7 @@ class TripAnalyzerService:
             logger.info(
                 "Pending anchor promoted for device=%s anchor_timestamp=%s "
                 "movement_timestamp=%s anchor_distance=%.2fm",
-                space_device.device_id,
+                device.id,
                 state.pending_anchor_location.timestamp,
                 loc.timestamp,
                 anchor_distance,
@@ -488,17 +486,17 @@ class TripAnalyzerService:
 
         logger.info(
             "Appending pending point for device=%s timestamp=%s pending_points_before=%s",
-            space_device.device_id,
+            device.id,
             loc.timestamp,
             len(state.pending_trip_locations),
         )
         self._append_trip_location(state.pending_trip_locations, loc)
         logger.info(
             "Pending buffer updated for device=%s pending_points_after=%s",
-            space_device.device_id,
+            device.id,
             len(state.pending_trip_locations),
         )
-        self._try_create_trip_from_pending(state, space_device)
+        self._try_create_trip_from_pending(state, device)
 
     def _handle_active_trip_movement_case(
         self,
@@ -655,12 +653,12 @@ class TripAnalyzerService:
     def _try_create_trip_from_pending(
         self,
         state: TripProcessingState,
-        space_device: SpaceDevice,
+        device: Device,
     ) -> None:
         if not self._validate_trip(state.pending_trip_locations):
             logger.debug(
                 "Trip not created for device=%s pending_points=%s",
-                space_device.device_id,
+                device.id,
                 len(state.pending_trip_locations),
             )
             return
@@ -668,7 +666,7 @@ class TripAnalyzerService:
         first_location = state.pending_trip_locations[0]
         last_location = state.pending_trip_locations[-1]
         state.current_trip = Trip.objects.create(
-            space_device=space_device,
+            device=device,
             started_at=first_location.timestamp,
             is_finished=False,
             last_latitude=last_location.latitude,
@@ -677,7 +675,7 @@ class TripAnalyzerService:
         )
         logger.info(
             "Trip created for device=%s trip_id=%s started_at=%s buffered_points=%s",
-            space_device.device_id,
+            device.id,
             state.current_trip.id,
             first_location.timestamp,
             len(state.pending_trip_locations),
@@ -690,14 +688,12 @@ class TripAnalyzerService:
         self,
         trip: Trip,
         organization_slug: str,
-        space_slug: str,
     ) -> TripWithLocations:
-        device_id = str(trip.space_device.device.id)
+        device_id = str(trip.device.id)
 
         raw_locations = self.telemetry_client.get_location_history(
             device_id=device_id,
             organization_slug=organization_slug,
-            space_slug=space_slug,
             start=trip.started_at,
             end=trip.last_report,
             limit=10000,
@@ -713,7 +709,7 @@ class TripAnalyzerService:
 
         return TripWithLocations(
             id=str(trip.id),
-            space_device_id=str(trip.space_device.id),
+            device_id=str(trip.device.id),
             started_at=trip.started_at.isoformat(),
             is_finished=trip.is_finished,
             checkpoints=location_points,
