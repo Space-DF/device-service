@@ -23,8 +23,8 @@ router.register("devices", DeviceViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("trips", ListTripView.as_view(), name="trip_list"),
-    path("trips/<uuid:id>", RetrieveTripView.as_view(), name="trip_detail"),
+    path("trips/", ListTripView.as_view(), name="trip_list"),
+    path("trips/<uuid:id>/", RetrieveTripView.as_view(), name="trip_detail"),
     path(
         "public/device-spaces",
         ListPublicSpaceDeviceView.as_view(),
