@@ -583,17 +583,11 @@ class CheckpointSerializer(serializers.Serializer):
 
 
 class TripListSerializer(serializers.ModelSerializer):
-    space_device_id = serializers.CharField(source="space_device.id", read_only=True)
-    device_id = serializers.CharField(source="space_device.device.id", read_only=True)
-    device_name = serializers.CharField(source="space_device.name", read_only=True)
-
     class Meta:
         model = Trip
         fields = [
             "id",
-            "space_device_id",
             "device_id",
-            "device_name",
             "started_at",
             "is_finished",
             "last_latitude",

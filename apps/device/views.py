@@ -7,13 +7,12 @@ from common.utils.switch_tenant import UseTenantFromRequestMixin
 from common.views.deactivation import DeactivationMixin
 from common.views.space import SpaceListCreateAPIView, SpaceUpdateAPIView
 from django.db import transaction
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import F, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, mixins, status, views, viewsets
+from rest_framework import generics, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ParseError
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -21,7 +20,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.device.constants import DeviceStatus
-from apps.device.filters import DeviceFilter, SpaceDeviceFilter
+from apps.device.filters import DeviceFilter, SpaceDeviceFilter, TripFilter
 from apps.device.models import Device, SpaceDevice, Trip
 from apps.device.quotas import DeviceQuota
 from apps.device.serializers import (
@@ -169,7 +168,7 @@ class SpaceDeviceSerializationMixin:
         return self.get_space_device_serializer_context(items, base_context=context)
 
 
-class ListCreateSpaceDeviceViewSet(
+class ListCreateSpaceDeviceView(
     SpaceDeviceSerializationMixin,
     SpaceListCreateAPIView,
 ):
@@ -255,128 +254,96 @@ class DeleteSpaceDeviceViewSet(
         return UpdateSpaceDeviceSerializer
 
 
-class TripViewSet(
-    DeactivationMixin,
-    mixins.RetrieveModelMixin,
-    mixins.ListModelMixin,
-    viewsets.GenericViewSet,
-):
-    deactivation = ["space_device.device", "space_device.space"]
+class ListTripView(DeactivationMixin, generics.ListAPIView):
+    deactivation = ["device"]
+    permission_classes = [AllowAny]
     pagination_class = BasePagination
     filter_backends = [OrderingFilter, DjangoFilterBackend]
-    filterset_fields = ["space_device__device_id"]
+    filterset_class = TripFilter
     ordering = ["-last_report"]
+    queryset = (
+        Trip.objects.filter(
+            Q(device__deactivated_at__isnull=True)
+            | Q(started_at__lt=F("device__deactivated_at"))
+        )
+        .select_related(
+            "device",
+            "device__lorawan_device",
+            "device__api_device",
+        )
+        .prefetch_related("device__space_devices")
+    )
+    serializer_class = TripListSerializer
 
     def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return None
         space_slug_name = self.request.headers.get("X-Space", None)
         if space_slug_name is None:
             raise ParseError("X-Space header is required")
 
-        filters = {
-            "space_device__space__slug_name": space_slug_name,
-            "space_device__space__is_active": True,
-        }
         space = Space.objects.filter(slug_name=space_slug_name).first()
         self.check_deactivated(space)
 
-        # If device is deactivated, only show trips before deactivation date
-        device_identifier = self.kwargs.get("dev_eui", "").strip()
-        lorawan_dev_eui = device_identifier.lower()
-        device = (
-            Device.objects.filter(
-                Q(lorawan_device__dev_eui=lorawan_dev_eui)
-                | Q(api_device__serial_number=device_identifier)
+        return self.queryset.filter(
+            Q(
+                device__space_devices__space__slug_name=space_slug_name,
+                device__space_devices__space__is_active=True,
             )
-            .only("deactivated_at")
-            .first()
-        )
-        if device and device.deactivated_at:
-            filters["created_at__lt"] = device.deactivated_at
+            | Q(device__is_published=True, device__space_devices__isnull=True)
+        ).distinct()
 
-        queryset = Trip.objects.filter(**filters).select_related(
-            "space_device",
-            "space_device__space",
-            "space_device__device",
-        )
-
-        if self.action == "retrieve":
-            queryset = queryset.select_related(
-                "space_device__device__lorawan_device",
-                "space_device__device__api_device",
-            )
-
-        return queryset
-
-    def get_serializer_class(self):
-        return TripDetailSerializer if self.action == "retrieve" else TripListSerializer
-
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-
-        trip_analyzer = TripAnalyzerService()
-        trip_with_locations = trip_analyzer.get_trip_with_locations(
-            instance,
-            request.tenant.slug_name,
-            instance.space_device.space.slug_name,
-        )
-
-        serializer = self.get_serializer(trip_with_locations)
-        return Response(serializer.data)
-
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                "space_device__device_id",
-                openapi.IN_QUERY,
-                description="Filter trips by Device ID",
-                type=openapi.TYPE_STRING,
-            ),
-        ]
-    )
     def list(self, request, *args, **kwargs):
-        # Always analyze the current trip when listing
-        device_id = request.query_params.get("space_device__device_id")
-
+        device_id = request.query_params.get("device_id")
         if not device_id:
-            raise ParseError(
-                "Device ID (space_device__device_id) query parameter is required."
-            )
+            return super().list(request, *args, **kwargs)
 
         trip_analyzer = TripAnalyzerService()
-        try:
-            space_device = SpaceDevice.objects.select_related("device", "space").get(
-                device__id=device_id
-            )
-        except SpaceDevice.DoesNotExist:
-            raise ParseError("Device does not exist or is not linked to any space.")
-        self.check_deactivated(space_device.space)
-        self.check_deactivated(space_device.device)
-
-        current_trip = (
-            Trip.objects.filter(space_device=space_device, is_finished=False)
-            .order_by("-started_at")
-            .first()
-        )
-
         trip_analyzer.analyze_and_update_current_trip(
-            request.tenant.slug_name, space_device, current_trip
+            request.tenant.slug_name, device_id
         )
+        return super().list(request, *args, **kwargs)
 
-        # Get the trips (including any newly created ones)
-        queryset = self.filter_queryset(self.get_queryset())
 
-        # List never includes checkpoints
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            response = self.get_paginated_response(serializer.data)
-            return response
+class RetrieveTripView(DeactivationMixin, generics.RetrieveAPIView):
+    deactivation = ["device"]
+    deactivation_allowed_methods = ["GET"]
+    permission_classes = [AllowAny]
+    lookup_field = "id"
+    queryset = (
+        Trip.objects.filter(
+            Q(device__deactivated_at__isnull=True)
+            | Q(started_at__lt=F("device__deactivated_at"))
+        )
+        .select_related(
+            "device",
+            "device__lorawan_device",
+            "device__api_device",
+        )
+        .prefetch_related("device__space_devices")
+    )
+    serializer_class = TripDetailSerializer
 
-        serializer = self.get_serializer(queryset, many=True)
+    def get_queryset(self):
+        space_slug_name = self.request.headers.get("X-Space", None)
+        if space_slug_name is None:
+            raise ParseError("X-Space header is required")
 
-        return Response(serializer.data)
+        space = Space.objects.filter(slug_name=space_slug_name).first()
+        self.check_deactivated(space)
+
+        return self.queryset.filter(
+            Q(
+                device__space_devices__space__slug_name=space_slug_name,
+                device__space_devices__space__is_active=True,
+            )
+            | Q(device__is_published=True, device__space_devices__isnull=True)
+        ).distinct()
+
+    def get_object(self):
+        instance = super().get_object()
+        trip_analyzer = TripAnalyzerService()
+        return trip_analyzer.get_trip_with_locations(
+            instance, self.request.tenant.slug_name
+        )
 
 
 class DeviceLookupView(UseTenantFromRequestMixin, generics.RetrieveAPIView):
