@@ -400,7 +400,7 @@ class CreateSpaceDeviceSerializer(SpaceDeviceSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        identifier = validated_data.pop("identifier").strip()
+        identifier = validated_data.pop("identifier").replace(" ", "")
         lower_identifier = identifier.lower()
         position_data = validated_data.pop("position", None)
         device = (
