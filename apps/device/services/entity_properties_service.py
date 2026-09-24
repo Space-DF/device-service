@@ -43,20 +43,6 @@ class EntityPropertiesService:
             if not category or value is None:
                 continue
 
-            if category == "location" and isinstance(value, dict):
-                latest_checkpoint = {
-                    "timestamp": entity.get("time_end"),
-                    "latitude": value.get("latitude"),
-                    "longitude": value.get("longitude"),
-                    "bearing": value.get("bearing"),
-                }
-                if (
-                    latest_checkpoint["latitude"] is not None
-                    and latest_checkpoint["longitude"] is not None
-                ):
-                    device_properties["latest_checkpoint"] = latest_checkpoint
-                continue
-
             device_properties[category] = value
 
         return device_properties or None
